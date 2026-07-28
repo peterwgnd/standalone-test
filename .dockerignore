@@ -1,0 +1,9 @@
+.git
+.gitignore
+.husky
+.firebaserc
+firebase.json
+front-end/node_modules
+functions/node_modules
+*.md
+*.log

@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Is the user an admin?
+    function isAdmin() {
+      return request.auth != null && (request.auth.token.admin == true || request.auth.token.admin == 'true');
+    }
+
+    // Rules for the Admin Users collection
+    match /admin_users/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    // Rules for the Surveys collection
+    match /surveys/{surveySlug} {
+      
+      // 1. Survey Configuration
+      // Public can read (needed to load the survey title/questions for respondents)
+      allow read: if true;
+      // Only admins can create/edit survey configurations
+      allow write: if isAdmin();
+
+      // 2. Responses Subcollection
+      match /responses/{responseId} {
+        // Public can submit new responses
+        allow create: if true;
+        
+        // Allow a user to read or update a specific document if they know the exact random ID
+        allow get, update: if true;
+        
+        // ONLY Admins can query the whole collection to see everyone's data or delete responses
+        allow list, delete: if isAdmin();
+      }
+
+      // 3. Admin Metadata Subcollection
+      match /admin/{adminDocId} {
+        allow read, write: if isAdmin();
+      }
+
+      // 4. Respondents Subcollection (Tokens)
+      match /respondents/{tokenId} {
+        // Anyone can check if a specific token exists (needed for the invite link)
+        allow get: if true;
+        
+        // Only admins can list all tokens or create/delete them
+        allow list, write: if isAdmin();
+      }
+    }
+    
+    // Explicitly deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

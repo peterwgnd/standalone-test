@@ -1,0 +1,56 @@
+:root {
+  /* Layout */
+  --max-width: 1200px;
+
+  /* Brand / Core Roles */
+  --color-primary: #000000;
+  --color-secondary: #ffffff;
+  --color-accent: #4485f4;
+
+  /* Feedback / State Roles */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #0ea5e9;
+
+  /* Neutral Roles */
+  --color-bg-base: #ffffff;
+  --color-bg-surface: #f8fafc;
+  --color-text-base: #0f172a;
+  --color-text-muted: #475569;
+  --color-border: #e2e8f0;
+
+  /* Form & Component Radii (Derived from existing hardcoded values) */
+  --radius-sm: 4px;   /* Badges, code blocks */
+  --radius-md: 8px;   /* Inputs, buttons, selects */
+  --radius-lg: 12px;  /* Cards, modals */
+
+  /* Component Elevation (Derived from existing hardcoded values) */
+  --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-modal: 0 10px 30px rgba(0, 0, 0, 0.2);
+  --shadow-focus: 0 0 0 2px rgba(0, 0, 0, 0.05);
+
+  /* Component Transitions (Derived from existing hardcoded values) */
+  --transition-base: 0.2s;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+strong {
+  font-weight: 500;
+}
