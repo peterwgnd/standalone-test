@@ -29,7 +29,15 @@ A small bridge that listens for requests from the admin dashboard and kicks off 
 
 ## 🚀 "Click-to-Deploy" Configuration
 
-This project is built to be easily deployed. Here are a few important things to know to get it running successfully:
+Deploying your own instance of the Standalone Analytics Platform takes less than 5 minutes. We use Google Cloud Shell to completely automate the provisioning of your infrastructure (Cloud Run, Secret Manager, Artifact Registry) and the deployment of your web app (Firebase).
+
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/peterwgnd/sensemaking-test.git&cloudshell_tutorial=tutorial.md)
+
+**To Deploy:**
+1. **Important:** Edit this `README.md` and replace `YOUR_GITHUB_REPO_URL` in the link above with the actual URL of your repository.
+2. Click the button above to launch Google Cloud Shell.
+3. A tutorial panel will open on the right side of your screen. Simply click the "Run" icon next to the `./setup.sh` command inside the tutorial!
+4. The script will ask for your email (to make you an Admin) and your Gemini API Key. It will handle everything else automatically!
 
 ### 🔑 Gemini API Key
 The orchestrator relies on the `google-genai` SDK to talk to Gemini. To avoid hardcoding keys or managing complex IAM permissions for simple deployments:

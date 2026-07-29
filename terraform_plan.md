@@ -46,17 +46,27 @@ This completely replaces the `gcloud run jobs create` command.
   - Timeout: `1800s` (30m)
   - Env/Secrets: Bind the `GEMINI_API_KEY` from Secret Manager
 
+### E. Firebase Web App & Frontend Config
+To eliminate the friction of manually copying the Firebase config object, Terraform will automatically provision the Firebase Web App and generate the configuration file for the Svelte frontend.
+* **Resource:** `google_firebase_web_app` (using `google-beta` provider)
+* **Data Source:** `google_firebase_web_app_config`
+* **Output:** A `local_file` resource will write the configuration dynamically to `front-end/src/firebase-config.json` before the Svelte app builds. 
+*(Note: The backend Cloud Run jobs and Cloud Functions will use the Firebase Admin SDK with Application Default Credentials via the `roles/datastore.user` service account, requiring no configuration objects or API keys).*
+
 ## 4. Achieving "Click-to-Deploy" (Path A: Cloud Shell)
 Based on the requirement to collect runtime user inputs (like `ADMIN_EMAILS` and `GEMINI_API_KEY`), we will utilize **Path A (Google Native)** via Cloud Shell.
 
 1. **The Entry Point:** Provide a standard "Run on Google Cloud" button in the `README.md`.
 2. **The Automation:** Clicking the button opens Cloud Shell, automatically clones the repository, and runs a provided `setup.sh` bash script.
-3. **The Interactive Prompt:** `setup.sh` explicitly asks the user for their configuration variables:
+3. **Project ID Inference:** `setup.sh` automatically retrieves the active GCP Project ID using `gcloud config get-value project`.
+4. **Minimal Prompts:** `setup.sh` explicitly asks the user *only* for configuration variables that cannot be inferred:
    ```bash
    read -p "Enter the first Admin Email: " ADMIN_EMAIL
    read -p "Enter your Gemini API Key: " GEMINI_KEY
    ```
-4. **The Deployment:** The script passes these inputs directly to Terraform (`terraform apply -var="admin_email=$ADMIN_EMAIL"`) to deploy the backend, and to the Firebase CLI (`firebase deploy`) to deploy the frontend and functions.
+5. **The Deployment Order:** 
+   - **Step 1:** The script passes inputs to Terraform (`terraform apply -var="admin_email=$ADMIN_EMAIL"`) to deploy the backend and dynamically write the Svelte `firebase-config.json`.
+   - **Step 2:** *After* Terraform completes, the script builds the Svelte app (which now has the config) and uses the Firebase CLI (`firebase deploy`) to deploy the frontend and functions.
 
 ## 5. Handling Future Upstream Updates
 The Cloud Run Dockerfile utilizes `git clone` to fetch the upstream pipeline logic dynamically. To allow users to pull future updates seamlessly:
