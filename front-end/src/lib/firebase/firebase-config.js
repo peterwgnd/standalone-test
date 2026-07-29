@@ -3,15 +3,16 @@ import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import firebaseConfigJSON from "../../firebase-config.json";
 
 const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCzTe3vU0fDbOC5bkSFMqPprLxjzqWM0g4",
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "conversation-ai-experiments.firebaseapp.com",
-    databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://conversation-ai-experiments.firebaseio.com",
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "conversation-ai-experiments",
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "conversation-ai-experiments.appspot.com",
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "69384366574",
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:69384366574:web:2014e4b58513ec7ccbc6ff"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigJSON.apiKey,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJSON.authDomain,
+    databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || firebaseConfigJSON.databaseURL,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJSON.projectId,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJSON.storageBucket,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJSON.messagingSenderId,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigJSON.appId
 };
 
 const app = initializeApp(firebaseConfig);

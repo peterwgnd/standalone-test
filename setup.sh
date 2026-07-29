@@ -5,6 +5,17 @@ set -e
 
 echo "🚀 Starting Standalone Analytics Platform click-to-deploy setup..."
 
+# 0. Environment Setup
+# Google Cloud Shell recently removed the terraform binary due to licensing changes. 
+# We must dynamically install it if the system stub is detected.
+if ! command -v terraform >/dev/null 2>&1 || terraform --version 2>&1 | grep -q "instructions at"; then
+    echo "📦 Installing Terraform (this will only happen once)..."
+    wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null 2>&1
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
+    sudo apt-get update > /dev/null 2>&1
+    sudo apt-get install -y terraform > /dev/null 2>&1
+fi
+
 # 1. Collect User Inputs
 echo "--------------------------------------------------------"
 echo "We need a few details to configure your environment."
