@@ -31,7 +31,7 @@ A small bridge that listens for requests from the admin dashboard and kicks off 
 
 Deploying your own instance of the Standalone Analytics Platform takes less than 5 minutes. We use Google Cloud Shell to completely automate the provisioning of your infrastructure (Cloud Run, Secret Manager, Artifact Registry) and the deployment of your web app (Firebase).
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/peterwgnd/sensemaking-test.git&cloudshell_tutorial=tutorial.md)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/peterwgnd/standalone-test.git&cloudshell_tutorial=tutorial.md)
 
 **To Deploy:**
 1. **Important:** Edit this `README.md` and replace `YOUR_GITHUB_REPO_URL` in the link above with the actual URL of your repository.
