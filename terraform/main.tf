@@ -4,6 +4,7 @@ resource "google_artifact_registry_repository" "app_repo" {
   format        = "DOCKER"
   location      = var.region
   description   = "Docker repository for the Standalone Analytics Platform"
+  depends_on    = [google_project_service.services]
 }
 
 # 2. Secret Manager Shell for Gemini API Key
@@ -13,6 +14,7 @@ resource "google_secret_manager_secret" "gemini_api_key" {
   replication {
     auto {}
   }
+  depends_on = [google_project_service.services]
 }
 
 # 3. Dedicated Service Account for Cloud Run Job
@@ -36,10 +38,17 @@ resource "google_secret_manager_secret_iam_member" "secret_access" {
 }
 
 # 4. Create the Firebase Web App
+resource "google_firebase_project" "default" {
+  provider   = google-beta
+  project    = var.project_id
+  depends_on = [google_project_service.services]
+}
+
 resource "google_firebase_web_app" "svelte_app" {
   provider     = google-beta
   project      = var.project_id
   display_name = "Svelte Admin UI"
+  depends_on   = [google_firebase_project.default]
 }
 
 # 5. Fetch the config object for the app we just created
