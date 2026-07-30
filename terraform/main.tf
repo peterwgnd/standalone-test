@@ -56,7 +56,7 @@ resource "local_file" "firebase_config" {
     projectId         = data.google_firebase_web_app_config.svelte_app_config.project
     storageBucket     = lookup(data.google_firebase_web_app_config.svelte_app_config, "storage_bucket", "")
     messagingSenderId = lookup(data.google_firebase_web_app_config.svelte_app_config, "messaging_sender_id", "")
-    appId             = data.google_firebase_web_app_config.svelte_app_config.app_id
+    appId             = google_firebase_web_app.svelte_app.app_id
   })
   filename = "${path.module}/../front-end/src/firebase-config.json"
 }

@@ -10,8 +10,9 @@ When you are ready, click the 'execute' icon on the code snippet below to start 
 ./setup.sh
 ```
 
-The script will prompt you for two things:
-1. **Your Email**: This will be used to make you the Admin of the application.
-2. **Gemini API Key**: This securely powers the AI backend orchestrator.
+The script will prompt you for three things:
+1. **Google Cloud Project ID**: The Google Cloud project where you want to deploy the resources (Press Enter to use your currently active project).
+2. **Your Email**: This will be used to make you the Admin of the application.
+3. **Gemini API Key**: This securely powers the AI backend orchestrator.
 
 Sit back and relax! The deployment will take roughly 3-5 minutes. Once finished, it will output the URL of your live dashboard.

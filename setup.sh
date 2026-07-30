@@ -10,7 +10,7 @@ echo "🚀 Starting Standalone Analytics Platform click-to-deploy setup..."
 # We must dynamically install it if the system stub is detected.
 if ! command -v terraform >/dev/null 2>&1 || terraform --version 2>&1 | grep -q "instructions at"; then
     echo "📦 Installing Terraform (this will only happen once)..."
-    wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null 2>&1
+    wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null 2>&1
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
     sudo apt-get update > /dev/null 2>&1
     sudo apt-get install -y terraform > /dev/null 2>&1
@@ -20,11 +20,24 @@ fi
 echo "--------------------------------------------------------"
 echo "We need a few details to configure your environment."
 echo "--------------------------------------------------------"
+
+# Try to get the active project, if any
+DEFAULT_PROJECT_ID=$(gcloud config get-value project 2>/dev/null || true)
+
+if [ -z "$DEFAULT_PROJECT_ID" ]; then
+    read -p "Enter your Google Cloud Project ID: " PROJECT_ID
+else
+    read -p "Enter your Google Cloud Project ID [$DEFAULT_PROJECT_ID]: " INPUT_PROJECT_ID
+    PROJECT_ID=${INPUT_PROJECT_ID:-$DEFAULT_PROJECT_ID}
+fi
+
+# Ensure project is set in gcloud so subsequent commands work seamlessly
+gcloud config set project $PROJECT_ID
+
 read -p "Enter your Google account email (this will be the Admin): " ADMIN_EMAIL
 read -p "Enter your Gemini API Key: " GEMINI_KEY
 
 # 2. Define Variables
-PROJECT_ID=$(gcloud config get-value project)
 REGION="us-central1"
 JOB_NAME="analytics-orchestrator-job"
 IMAGE_NAME="orchestrator"
@@ -39,7 +52,7 @@ echo "🏗️  Provisioning foundation with Terraform..."
 cd terraform
 terraform init
 # Provision everything and inject the Gemini Key into the Secret Version
-terraform apply -auto-approve -var="gemini_api_key=${GEMINI_KEY}"
+terraform apply -auto-approve -var="gemini_api_key=${GEMINI_KEY}" -var="project_id=${PROJECT_ID}"
 
 # Extract the Registry URL for the Docker push
 REPO_URL=$(terraform output -raw artifact_registry_url)
