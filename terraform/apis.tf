@@ -7,7 +7,8 @@ resource "google_project_service" "services" {
     "cloudbuild.googleapis.com",
     "firebase.googleapis.com",
     "firestore.googleapis.com",
-    "firebasestorage.googleapis.com"
+    "firebasestorage.googleapis.com",
+    "appengine.googleapis.com"
   ])
 
   project = var.project_id

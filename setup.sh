@@ -114,11 +114,11 @@ if gcloud firestore databases describe --database=standalone --quiet >/dev/null 
   terraform import google_firestore_database.standalone "projects/${PROJECT_ID}/databases/standalone" >/dev/null 2>&1 || true
 fi
 
-# Auto-heal: Firebase Storage Bucket
-if gcloud storage buckets describe "gs://${PROJECT_ID}-firebasestorage" --quiet >/dev/null 2>&1; then
-  echo "   - Importing Firebase Storage Bucket..."
-  terraform import google_storage_bucket.default "${PROJECT_ID}-firebasestorage" >/dev/null 2>&1 || true
-  terraform import google_firebase_storage_bucket.default "projects/${PROJECT_ID}/buckets/${PROJECT_ID}-firebasestorage" >/dev/null 2>&1 || true
+# Auto-heal: App Engine Application (Default Firebase Storage Bucket)
+if gcloud app describe --quiet >/dev/null 2>&1; then
+  echo "   - Importing App Engine Application & Default Storage Bucket..."
+  terraform import google_app_engine_application.default "projects/${PROJECT_ID}" >/dev/null 2>&1 || true
+  terraform import google_firebase_storage_bucket.default "projects/${PROJECT_ID}/buckets/${PROJECT_ID}.appspot.com" >/dev/null 2>&1 || true
 fi
 
 # Provision infrastructure

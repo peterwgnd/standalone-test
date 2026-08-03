@@ -65,19 +65,18 @@ resource "google_firebase_project" "default" {
   depends_on = [time_sleep.wait_60_seconds]
 }
 
-# 6. Create the Firebase Storage Bucket
-resource "google_storage_bucket" "default" {
-  provider                    = google-beta
-  name                        = "${var.project_id}-firebasestorage"
-  location                    = var.region
-  uniform_bucket_level_access = true
-  depends_on                  = [time_sleep.wait_60_seconds]
+# 6. Create the Default App Engine Application (provisions default Firebase Storage bucket <project-id>.appspot.com)
+resource "google_app_engine_application" "default" {
+  provider    = google-beta
+  project     = var.project_id
+  location_id = var.region
+  depends_on  = [time_sleep.wait_60_seconds]
 }
 
 resource "google_firebase_storage_bucket" "default" {
   provider   = google-beta
   project    = var.project_id
-  bucket_id  = google_storage_bucket.default.name
+  bucket_id  = google_app_engine_application.default.default_bucket
   depends_on = [google_firebase_project.default]
 }
 
