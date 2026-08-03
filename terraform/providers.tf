@@ -8,6 +8,9 @@ terraform {
       source  = "hashicorp/google-beta"
       version = "~> 5.0"
     }
+    time = {
+      source = "hashicorp/time"
+    }
   }
   
   # Enable dynamic GCS backend

@@ -5,11 +5,19 @@ resource "google_project_service" "services" {
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "cloudbuild.googleapis.com",
-    "firebase.googleapis.com"
+    "firebase.googleapis.com",
+    "firestore.googleapis.com",
+    "firebasestorage.googleapis.com"
   ])
 
   project = var.project_id
   service = each.value
 
   disable_on_destroy = false
+}
+
+# Create a 60-second delay after enabling APIs to allow GCP service controllers to propagate
+resource "time_sleep" "wait_60_seconds" {
+  depends_on      = [google_project_service.services]
+  create_duration = "60s"
 }

@@ -4,7 +4,19 @@ resource "google_artifact_registry_repository" "app_repo" {
   format        = "DOCKER"
   location      = var.region
   description   = "Docker repository for the Standalone Analytics Platform"
-  depends_on    = [google_project_service.services]
+  depends_on    = [time_sleep.wait_60_seconds]
+}
+
+# Fetch GCP project details (including project number for Cloud Build SA)
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
+# Grant Cloud Build service account permission to push Docker images to Artifact Registry
+resource "google_project_iam_member" "cloudbuild_push" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
 
 # 2. Secret Manager Shell for Gemini API Key
@@ -14,7 +26,7 @@ resource "google_secret_manager_secret" "gemini_api_key" {
   replication {
     auto {}
   }
-  depends_on = [google_project_service.services]
+  depends_on = [time_sleep.wait_60_seconds]
 }
 
 # 3. Dedicated Service Account for Cloud Run Job
@@ -37,43 +49,47 @@ resource "google_secret_manager_secret_iam_member" "secret_access" {
   member    = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
-# 4. Create the Firebase Web App
+# 4. Create the Firestore Database
+resource "google_firestore_database" "standalone" {
+  project     = var.project_id
+  name        = "standalone"
+  location_id = var.region
+  type        = "FIRESTORE_NATIVE"
+  depends_on  = [time_sleep.wait_60_seconds]
+}
+
+# 5. Create the Firebase Project
 resource "google_firebase_project" "default" {
   provider   = google-beta
   project    = var.project_id
-  depends_on = [google_project_service.services]
+  depends_on = [time_sleep.wait_60_seconds]
 }
 
+# 6. Create the Firebase Storage Bucket
+resource "google_storage_bucket" "default" {
+  provider                    = google-beta
+  name                        = "${var.project_id}.firebasestorage.app"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  depends_on                  = [time_sleep.wait_60_seconds]
+}
+
+resource "google_firebase_storage_bucket" "default" {
+  provider   = google-beta
+  project    = var.project_id
+  bucket_id  = google_storage_bucket.default.name
+  depends_on = [google_firebase_project.default]
+}
+
+# 7. Create the Firebase Web App
 resource "google_firebase_web_app" "svelte_app" {
   provider     = google-beta
   project      = var.project_id
   display_name = "Svelte Admin UI"
-  depends_on   = [google_firebase_project.default]
-}
-
-# 5. Fetch the config object for the app we just created
-data "google_firebase_web_app_config" "svelte_app_config" {
-  provider   = google-beta
-  web_app_id = google_firebase_web_app.svelte_app.app_id
-}
-
-# 6. Write the config to a JSON file in your Svelte directory
-resource "local_file" "firebase_config" {
-  content  = jsonencode({
-    apiKey            = data.google_firebase_web_app_config.svelte_app_config.api_key
-    authDomain        = data.google_firebase_web_app_config.svelte_app_config.auth_domain
-    projectId         = data.google_firebase_web_app_config.svelte_app_config.project
-    storageBucket     = lookup(data.google_firebase_web_app_config.svelte_app_config, "storage_bucket", "")
-    messagingSenderId = lookup(data.google_firebase_web_app_config.svelte_app_config, "messaging_sender_id", "")
-    appId             = google_firebase_web_app.svelte_app.app_id
-  })
-  filename = "${path.module}/../front-end/src/firebase-config.json"
-}
-
-# 7. Create the initial Secret Version so Cloud Run doesn't fail
-resource "google_secret_manager_secret_version" "gemini_api_key_data" {
-  secret      = google_secret_manager_secret.gemini_api_key.id
-  secret_data = var.gemini_api_key
+  depends_on   = [
+    google_firebase_project.default,
+    google_firebase_storage_bucket.default
+  ]
 }
 
 # 8. Cloud Run Job (Using Dummy Image & Lifecycle Ignore)
@@ -110,8 +126,8 @@ resource "google_cloud_run_v2_job" "analytics_orchestrator" {
 
   depends_on = [
     google_artifact_registry_repository.app_repo,
+    google_firestore_database.standalone,
     google_project_iam_member.firestore_access,
-    google_secret_manager_secret_iam_member.secret_access,
-    google_secret_manager_secret_version.gemini_api_key_data
+    google_secret_manager_secret_iam_member.secret_access
   ]
 }

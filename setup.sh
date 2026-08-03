@@ -54,7 +54,7 @@ echo "🏗️  Setting up Terraform Remote State..."
 STATE_BUCKET="${PROJECT_ID}-tfstate"
 
 # Create GCS bucket for state if it doesn't exist
-if ! gcloud storage buckets describe "gs://${STATE_BUCKET}" >/dev/null 2>&1; then
+if ! gcloud storage buckets describe "gs://${STATE_BUCKET}" --quiet >/dev/null 2>&1; then
   echo "📦 Creating state bucket gs://${STATE_BUCKET}..."
   gcloud storage buckets create "gs://${STATE_BUCKET}" --location="${REGION}" --uniform-bucket-level-access
 fi
@@ -64,17 +64,66 @@ cd terraform
 # Initialize backend dynamically pointing to the state bucket
 terraform init -reconfigure -backend-config="bucket=${STATE_BUCKET}"
 
-# Auto-heal: If the Service Account exists in GCP but not in state, import it
+# Securely pass variables to Terraform
+export TF_VAR_project_id="${PROJECT_ID}"
+
+# Securely create secret shell & inject Gemini API key version via gcloud (keeps sensitive key out of terraform.tfstate)
+if ! gcloud secrets describe gemini-api-key --quiet >/dev/null 2>&1; then
+  echo "🔑 Creating Secret Manager secret gemini-api-key..."
+  gcloud secrets create gemini-api-key --replication-policy="automatic" --quiet
+fi
+echo "🔑 Injecting Gemini API key into Secret Manager..."
+echo -n "${GEMINI_KEY}" | gcloud secrets versions add gemini-api-key --data-file=- --quiet
+
+echo "🔍 Checking for pre-existing resources to auto-import..."
+
+# Auto-heal: Service Account
 SA_EMAIL="analytics-orchestrator-sa@${PROJECT_ID}.iam.gserviceaccount.com"
-if gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
-  echo "🔍 Service account already exists in GCP. Ensuring it is tracked in Terraform state..."
-  terraform import -var="gemini_api_key=${GEMINI_KEY}" -var="project_id=${PROJECT_ID}" \
-    google_service_account.cloud_run_sa "projects/${PROJECT_ID}/serviceAccounts/${SA_EMAIL}" >/dev/null 2>&1 || true
+if gcloud iam service-accounts describe "${SA_EMAIL}" --quiet >/dev/null 2>&1; then
+  echo "   - Importing Service Account..."
+  terraform import google_service_account.cloud_run_sa "projects/${PROJECT_ID}/serviceAccounts/${SA_EMAIL}" >/dev/null 2>&1 || true
+fi
+
+# Auto-heal: Artifact Registry
+if gcloud artifacts repositories describe standalone-analytics-repo --location="${REGION}" --quiet >/dev/null 2>&1; then
+  echo "   - Importing Artifact Registry..."
+  terraform import google_artifact_registry_repository.app_repo "projects/${PROJECT_ID}/locations/${REGION}/repositories/standalone-analytics-repo" >/dev/null 2>&1 || true
+fi
+
+# Auto-heal: Secret Manager
+if gcloud secrets describe gemini-api-key --quiet >/dev/null 2>&1; then
+  echo "   - Importing Secret Manager Secret..."
+  terraform import google_secret_manager_secret.gemini_api_key "projects/${PROJECT_ID}/secrets/gemini-api-key" >/dev/null 2>&1 || true
+fi
+
+# Auto-heal: Cloud Run Job
+if gcloud run jobs describe "${JOB_NAME}" --region="${REGION}" --quiet >/dev/null 2>&1; then
+  echo "   - Importing Cloud Run Job..."
+  terraform import google_cloud_run_v2_job.analytics_orchestrator "projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB_NAME}" >/dev/null 2>&1 || true
+fi
+
+# Auto-heal: Firebase Project (checks if Firebase API is enabled)
+if gcloud services list --enabled --quiet | grep -q "firebase.googleapis.com"; then
+  echo "   - Importing Firebase Project..."
+  terraform import google_firebase_project.default "projects/${PROJECT_ID}" >/dev/null 2>&1 || true
+fi
+
+# Auto-heal: Firestore Database 'standalone'
+if gcloud firestore databases describe --database=standalone --quiet >/dev/null 2>&1; then
+  echo "   - Importing Firestore Database..."
+  terraform import google_firestore_database.standalone "projects/${PROJECT_ID}/databases/standalone" >/dev/null 2>&1 || true
+fi
+
+# Auto-heal: Firebase Storage Bucket
+if gcloud storage buckets describe "gs://${PROJECT_ID}.firebasestorage.app" --quiet >/dev/null 2>&1; then
+  echo "   - Importing Firebase Storage Bucket..."
+  terraform import google_storage_bucket.default "${PROJECT_ID}.firebasestorage.app" >/dev/null 2>&1 || true
+  terraform import google_firebase_storage_bucket.default "projects/${PROJECT_ID}/buckets/${PROJECT_ID}.firebasestorage.app" >/dev/null 2>&1 || true
 fi
 
 # Provision infrastructure
 echo "🚀 Applying Terraform configuration..."
-terraform apply -auto-approve -var="gemini_api_key=${GEMINI_KEY}" -var="project_id=${PROJECT_ID}"
+terraform apply -auto-approve
 
 # Extract the Registry URL for the Docker push
 REPO_URL=$(terraform output -raw artifact_registry_url)
@@ -96,8 +145,28 @@ echo "📦 Installing Frontend and Cloud Functions dependencies..."
 (cd front-end && npm install)
 (cd functions && npm install)
 
-echo "🌐 Deploying Svelte Admin UI and Cloud Functions..."
+echo "🌐 Fetching Firebase client SDK configuration..."
 echo "{\"projects\":{\"default\":\"${PROJECT_ID}\"}}" > .firebaserc
+
+SDK_CONFIG=$(firebase apps:sdkconfig WEB --json --project="${PROJECT_ID}")
+node -e '
+  const data = JSON.parse(process.argv[1]);
+  const cfg = data.result ? (data.result.sdkConfig || data.result) : data;
+  const fs = require("fs");
+  fs.writeFileSync("front-end/src/firebase-config.json", JSON.stringify(cfg, null, 2));
+  const envContent = [
+    `VITE_FIREBASE_API_KEY=${cfg.apiKey || ""}`,
+    `VITE_FIREBASE_AUTH_DOMAIN=${cfg.authDomain || ""}`,
+    `VITE_FIREBASE_DATABASE_URL=${cfg.databaseURL || ""}`,
+    `VITE_FIREBASE_PROJECT_ID=${cfg.projectId || ""}`,
+    `VITE_FIREBASE_STORAGE_BUCKET=${cfg.storageBucket || ""}`,
+    `VITE_FIREBASE_MESSAGING_SENDER_ID=${cfg.messagingSenderId || ""}`,
+    `VITE_FIREBASE_APP_ID=${cfg.appId || ""}`
+  ].join("\n");
+  fs.writeFileSync("front-end/.env", envContent);
+' "$SDK_CONFIG"
+
+echo "🌐 Deploying Svelte Admin UI and Cloud Functions..."
 firebase deploy --project "${PROJECT_ID}"
 
 echo "--------------------------------------------------------"
