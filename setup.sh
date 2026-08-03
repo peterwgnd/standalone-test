@@ -191,8 +191,18 @@ else
   echo "⚠️ Warning: Could not detect Web App ID automatically. Continuing deploy..."
 fi
 
-echo "🌐 Deploying Svelte Admin UI and Cloud Functions..."
-firebase deploy --project "${PROJECT_ID}"
+echo "🌐 Deploying Svelte Admin UI and Cloud Functions (with auto-retry)..."
+MAX_RETRIES=3
+RETRY_COUNT=0
+until firebase deploy --project "${PROJECT_ID}"; do
+  RETRY_COUNT=$((RETRY_COUNT+1))
+  if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+    echo "❌ Deployment failed after ${MAX_RETRIES} attempts. Please check your network connection and try again."
+    exit 1
+  fi
+  echo "⚠️ Network interruption detected during deploy. Automatically retrying in 5 seconds (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
+  sleep 5
+done
 
 echo "--------------------------------------------------------"
 echo "✅ Deployment complete! Your Standalone Analytics Platform is live:"
