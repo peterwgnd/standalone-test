@@ -93,7 +93,8 @@ gcloud run jobs update ${JOB_NAME} \
 
 # 6. Deploy Frontend and Functions
 echo "🌐 Deploying Svelte Admin UI and Cloud Functions..."
-firebase deploy
+echo "{\"projects\":{\"default\":\"${PROJECT_ID}\"}}" > .firebaserc
+firebase deploy --project "${PROJECT_ID}"
 
 echo "--------------------------------------------------------"
 echo "✅ Deployment complete! Your Standalone Analytics Platform is live."
