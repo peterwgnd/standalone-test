@@ -147,3 +147,19 @@ resource "google_cloud_run_v2_job" "analytics_orchestrator" {
     google_secret_manager_secret_iam_member.secret_access
   ]
 }
+
+# 9. Initialize Identity Platform Config (Firebase Authentication)
+resource "google_identity_platform_config" "auth" {
+  provider = google-beta
+  project  = var.project_id
+
+  # This natively handles the duplicate email setting
+  sign_in {
+    allow_duplicate_emails = false
+  }
+
+  depends_on = [
+    time_sleep.wait_60_seconds,
+    google_firebase_project.default
+  ]
+}

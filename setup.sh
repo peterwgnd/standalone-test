@@ -144,16 +144,9 @@ until terraform apply -auto-approve; do
   sleep 5
 done
 
-# Automatically initialize Firebase Authentication & enable Google Sign-In (bypasses Terraform Cloud Shell ADC quota limits)
-echo "🔑 Initializing Firebase Authentication & Google Sign-In..."
+# Automatically enable Google Sign-In in Firebase Authentication (Terraform initializes base Auth config)
+echo "🔑 Enabling Google Sign-In authentication provider..."
 AUTH_TOKEN=$(gcloud auth application-default print-access-token 2>/dev/null || gcloud auth print-access-token 2>/dev/null)
-
-curl -s -X PATCH \
-  -H "Authorization: Bearer ${AUTH_TOKEN}" \
-  -H "x-goog-user-project: ${PROJECT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{"signIn": {"allowDuplicateEmails": false}}' \
-  "https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT_ID}/config?updateMask=signIn.allowDuplicateEmails" >/dev/null 2>&1 || true
 
 curl -s -X PATCH \
   -H "Authorization: Bearer ${AUTH_TOKEN}" \
