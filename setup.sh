@@ -125,6 +125,13 @@ if gcloud app describe --quiet >/dev/null 2>&1; then
   terraform import google_firebase_storage_bucket.default "${PROJECT_ID}/${PROJECT_ID}.appspot.com" >/dev/null 2>&1 || true
 fi
 
+# Auto-heal: Identity Platform (Firebase Authentication)
+if gcloud services list --enabled --quiet | grep -q "identitytoolkit.googleapis.com"; then
+  echo "   - Importing Identity Platform (Firebase Auth) Configuration..."
+  terraform import google_identity_platform_config.default "projects/${PROJECT_ID}/config" >/dev/null 2>&1 || true
+  terraform import google_identity_platform_default_supported_idp_config.google_sign_in "projects/${PROJECT_ID}/defaultSupportedIdpConfigs/google.com" >/dev/null 2>&1 || true
+fi
+
 # Provision infrastructure
 echo "🚀 Applying Terraform configuration (with auto-retry)..."
 MAX_RETRIES=3
@@ -230,5 +237,5 @@ done
 
 echo "--------------------------------------------------------"
 echo "✅ Deployment complete! Your Standalone Analytics Platform is live:"
-echo "👉 Admin UI URL: https://${PROJECT_ID}.web.app"
+echo "👉 Admin UI URL: https://${PROJECT_ID}.web.app/dashboard"
 echo "--------------------------------------------------------"

@@ -12,7 +12,8 @@ resource "google_project_service" "services" {
     "cloudfunctions.googleapis.com",
     "eventarc.googleapis.com",
     "pubsub.googleapis.com",
-    "logging.googleapis.com"
+    "logging.googleapis.com",
+    "identitytoolkit.googleapis.com"
   ])
 
   project = var.project_id
