@@ -117,8 +117,8 @@ fi
 # Auto-heal: App Engine Application (Default Firebase Storage Bucket)
 if gcloud app describe --quiet >/dev/null 2>&1; then
   echo "   - Importing App Engine Application & Default Storage Bucket..."
-  terraform import google_app_engine_application.default "projects/${PROJECT_ID}" >/dev/null 2>&1 || true
-  terraform import google_firebase_storage_bucket.default "projects/${PROJECT_ID}/buckets/${PROJECT_ID}.appspot.com" >/dev/null 2>&1 || true
+  terraform import google_app_engine_application.default "${PROJECT_ID}" >/dev/null 2>&1 || true
+  terraform import google_firebase_storage_bucket.default "${PROJECT_ID}/${PROJECT_ID}.appspot.com" >/dev/null 2>&1 || true
 fi
 
 # Provision infrastructure
