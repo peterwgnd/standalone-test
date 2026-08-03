@@ -142,8 +142,8 @@ gcloud run jobs update ${JOB_NAME} \
 
 # 6. Deploy Frontend and Functions
 echo "📦 Installing Frontend and Cloud Functions dependencies..."
-(cd front-end && npm install)
-(cd functions && npm install)
+(cd front-end && rm -rf node_modules && npm install)
+(cd functions && rm -rf node_modules && npm install)
 
 echo "🌐 Fetching Firebase client SDK configuration..."
 echo "{\"projects\":{\"default\":\"${PROJECT_ID}\"}}" > .firebaserc
