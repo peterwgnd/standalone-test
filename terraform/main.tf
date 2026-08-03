@@ -69,8 +69,12 @@ resource "google_firebase_project" "default" {
 resource "google_app_engine_application" "default" {
   provider    = google-beta
   project     = var.project_id
-  location_id = var.region
+  location_id = "us-central"
   depends_on  = [time_sleep.wait_60_seconds]
+
+  lifecycle {
+    ignore_changes = [location_id]
+  }
 }
 
 resource "google_firebase_storage_bucket" "default" {
