@@ -92,6 +92,10 @@ gcloud run jobs update ${JOB_NAME} \
   --region ${REGION}
 
 # 6. Deploy Frontend and Functions
+echo "📦 Installing Frontend and Cloud Functions dependencies..."
+(cd front-end && npm install)
+(cd functions && npm install)
+
 echo "🌐 Deploying Svelte Admin UI and Cloud Functions..."
 echo "{\"projects\":{\"default\":\"${PROJECT_ID}\"}}" > .firebaserc
 firebase deploy --project "${PROJECT_ID}"
