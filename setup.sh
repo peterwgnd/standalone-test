@@ -129,7 +129,6 @@ fi
 if gcloud services list --enabled --quiet | grep -q "identitytoolkit.googleapis.com"; then
   echo "   - Importing Identity Platform (Firebase Auth) Configuration..."
   terraform import google_identity_platform_config.default "projects/${PROJECT_ID}/config" >/dev/null 2>&1 || true
-  terraform import google_identity_platform_default_supported_idp_config.google_sign_in "projects/${PROJECT_ID}/defaultSupportedIdpConfigs/google.com" >/dev/null 2>&1 || true
 fi
 
 # Provision infrastructure
@@ -145,6 +144,14 @@ until terraform apply -auto-approve; do
   echo "⚠️ Network interruption detected during Terraform apply. Automatically retrying in 5 seconds (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
   sleep 5
 done
+
+# Automatically enable Google Sign-In in Firebase Authentication (no OAuth client ID/secret required)
+echo "🔑 Enabling Google Sign-In authentication provider..."
+curl -s -X PATCH \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}' \
+  "https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT_ID}/defaultSupportedIdpConfigs/google.com?updateMask=enabled" >/dev/null 2>&1 || true
 
 # Extract the Registry URL for the Docker push
 REPO_URL=$(terraform output -raw artifact_registry_url)
