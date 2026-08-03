@@ -8,7 +8,11 @@ resource "google_project_service" "services" {
     "firebase.googleapis.com",
     "firestore.googleapis.com",
     "firebasestorage.googleapis.com",
-    "appengine.googleapis.com"
+    "appengine.googleapis.com",
+    "cloudfunctions.googleapis.com",
+    "eventarc.googleapis.com",
+    "pubsub.googleapis.com",
+    "logging.googleapis.com"
   ])
 
   project = var.project_id

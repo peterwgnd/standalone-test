@@ -194,7 +194,7 @@ fi
 echo "🌐 Deploying Svelte Admin UI and Cloud Functions (with auto-retry)..."
 MAX_RETRIES=3
 RETRY_COUNT=0
-until firebase deploy --project "${PROJECT_ID}"; do
+until firebase deploy --project "${PROJECT_ID}" --force --non-interactive; do
   RETRY_COUNT=$((RETRY_COUNT+1))
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
     echo "❌ Deployment failed after ${MAX_RETRIES} attempts. Please check your network connection and try again."

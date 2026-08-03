@@ -19,6 +19,19 @@ resource "google_project_iam_member" "cloudbuild_push" {
   member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
 
+# Grant default Compute Engine service account (used by Cloud Functions Gen 2) required Eventarc & Firestore permissions
+resource "google_project_iam_member" "functions_eventarc_receiver" {
+  project = var.project_id
+  role    = "roles/eventarc.eventReceiver"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "functions_firestore_user" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
 # 2. Secret Manager Shell for Gemini API Key
 resource "google_secret_manager_secret" "gemini_api_key" {
   secret_id = "GEMINI_API_KEY"
