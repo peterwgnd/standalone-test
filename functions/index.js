@@ -225,7 +225,7 @@ exports.triggerAnalyticsPipeline = onCall({ region: "us-central1" }, async (requ
         }
 
         const runClient = new JobsClient();
-        const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId;
+        const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || "{}").projectId;
         const name = runClient.jobPath(projectId, "us-central1", "survey-orchestrator");
 
         // Use a unique output directory per execution to prevent checkpoint 
