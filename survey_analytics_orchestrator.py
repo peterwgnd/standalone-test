@@ -53,10 +53,15 @@ def update_telemetry(db, survey_slug: str, status_msg: str, is_complete: bool = 
     # Throttle to avoid hitting Firestore's 1-write-per-second limit
     now = time.time()
     elapsed = now - _LAST_TELEMETRY_UPDATE
-    if elapsed < 1.5 and not is_complete:
-        logging.info(f"Skipping telemetry update (too fast): {status_msg}")
-        return
-        
+    if elapsed < 1.5:
+        if not is_complete:
+            logging.info(f"Skipping telemetry update (too fast): {status_msg}")
+            return
+        else:
+            sleep_time = 1.5 - elapsed
+            logging.info(f"Sleeping {sleep_time:.2f}s to avoid Firestore rate limit for final update.")
+            time.sleep(sleep_time)
+            
     try:
         db.collection("surveys").document(survey_slug).collection("admin").document("metadata").set(
             {
@@ -85,6 +90,7 @@ def sync_state_from_bucket(bucket, survey_slug: str, output_dir: str):
         local_path = os.path.join(output_dir, relative_path)
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         blob.download_to_filename(local_path)
+        logging.info(f"Downloaded state file: {relative_path}")
         count += 1
     if count > 0:
         logging.info(f"Pulled {count} existing intermediate/checkpoint files from Cloud Storage.")
@@ -112,6 +118,7 @@ def sync_state_to_bucket(bucket, survey_slug: str, output_dir: str, admin_ref):
             blob_path = f"{prefix}{relative_path}"
             blob = bucket.blob(blob_path)
             blob.upload_from_filename(local_path)
+            logging.info(f"Uploaded state file: {relative_path}")
             if not relative_path.startswith(".checkpoints"):
                 uploaded_urls.append(f"gs://{bucket.name}/{blob_path}")
                 
@@ -156,6 +163,9 @@ def main():
     
     args = parser.parse_args()
     log_dir = setup_logging(args.log_level, args.output_dir)
+    
+    logging.info(f"Starting Survey Analytics Orchestrator for slug: {args.survey_slug}")
+    logging.info(f"Pipeline Config: model={args.model_name}, skip_autoraters={args.skip_autoraters}, skip_quote_extraction={args.skip_quote_extraction}, topics_specified={bool(args.topics)}")
     
     # 0. Connect to GCP and Prep Data
     try:

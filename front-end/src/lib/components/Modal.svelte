@@ -35,7 +35,7 @@
     bind:this={dialog} 
     onclose={close} 
     onclick={handleBackdropClick}
-    class="modal-content"
+    class="modal-content">
 >
     <div class="modal-inner">
         <div class="modal-header">

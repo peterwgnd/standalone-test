@@ -228,7 +228,9 @@ exports.triggerAnalyticsPipeline = onCall({ region: "us-central1" }, async (requ
         const projectId = process.env.GCLOUD_PROJECT || "conversation-ai-experiments";
         const name = runClient.jobPath(projectId, "us-central1", "survey-orchestrator");
 
-        const runArgs = ["-s", slug, "-o", "/tmp"];
+        // Use a unique output directory per execution to prevent checkpoint 
+        // bleeding across reused Cloud Run instances.
+        const runArgs = ["-s", slug, "-o", `/tmp/${slug}`];
         if (request.data.model_name) {
             runArgs.push("--model_name", request.data.model_name);
         }
@@ -295,7 +297,8 @@ exports.cancelAnalyticsPipeline = onCall({ region: "us-central1" }, async (reque
         // Update telemetry to Canceled
         await adminRef.update({
             "telemetry.status": "Canceled by user.",
-            "telemetry.is_complete": false
+            "telemetry.is_complete": false,
+            "telemetry.updated_at": FieldValue.serverTimestamp()
         });
 
         return { success: true };

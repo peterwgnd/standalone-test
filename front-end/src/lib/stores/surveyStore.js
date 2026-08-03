@@ -16,6 +16,7 @@ const createSurveyStore = () => {
     let unsubOpen = null;
     let unsubClosed = null;
     let unsubUploaded = null;
+    let adminUnsubs = new Map();
 
     return {
         subscribe,
@@ -24,6 +25,8 @@ const createSurveyStore = () => {
                 if (unsubOpen) unsubOpen();
                 if (unsubClosed) unsubClosed();
                 if (unsubUploaded) unsubUploaded();
+                adminUnsubs.forEach(unsub => unsub());
+                adminUnsubs.clear();
 
                 const surveysRef = collection(db, 'surveys');
                 
@@ -38,7 +41,33 @@ const createSurveyStore = () => {
                     }
                 };
 
-                unsubOpen = onSnapshot(openQuery, async (snapshot) => {
+                const syncAdminMetadata = (id, storeKey) => {
+                    if (!adminUnsubs.has(id)) {
+                        const adminRef = doc(db, 'surveys', id, 'admin', 'metadata');
+                        const unsub = onSnapshot(adminRef, (adminSnap) => {
+                            if (adminSnap.exists()) {
+                                update(s => {
+                                    const list = s[storeKey].map(survey => {
+                                        if (survey.id === id) {
+                                            return { ...survey, ...adminSnap.data() };
+                                        }
+                                        return survey;
+                                    });
+                                    return { ...s, [storeKey]: list };
+                                });
+                            }
+                        });
+                        adminUnsubs.set(id, unsub);
+                    }
+                };
+
+                const handleSnapshot = async (snapshot, storeKey, loadCallback) => {
+                    // Start listeners for real-time telemetry updates
+                    snapshot.docs.forEach(docSnapshot => {
+                        syncAdminMetadata(docSnapshot.id, storeKey);
+                    });
+
+                    // Initial fetch to prevent UI flickering
                     const data = await Promise.all(snapshot.docs.map(async docSnapshot => {
                         const s = { id: docSnapshot.id, ...docSnapshot.data() };
                         try {
@@ -49,46 +78,26 @@ const createSurveyStore = () => {
                         }
                         return s;
                     }));
-                    update(s => ({ ...s, openSurveys: data, error: null }));
-                    openLoaded = true; checkDone();
+                    
+                    update(s => ({ ...s, [storeKey]: data, error: null }));
+                    loadCallback();
+                };
+
+                unsubOpen = onSnapshot(openQuery, (snapshot) => {
+                    handleSnapshot(snapshot, 'openSurveys', () => { openLoaded = true; checkDone(); });
                 }, (error) => {
-                    console.error("Survey store error:", error);
                     update(s => ({ ...s, loading: false, error: error.message }));
                 });
 
-                unsubClosed = onSnapshot(closedQuery, async (snapshot) => {
-                    const data = await Promise.all(snapshot.docs.map(async docSnapshot => {
-                        const s = { id: docSnapshot.id, ...docSnapshot.data() };
-                        try {
-                            const adminSnap = await getDoc(doc(db, 'surveys', docSnapshot.id, 'admin', 'metadata'));
-                            if (adminSnap.exists()) Object.assign(s, adminSnap.data());
-                        } catch (e) {
-                            console.warn("Failed to fetch admin data for survey", docSnapshot.id, e);
-                        }
-                        return s;
-                    }));
-                    update(s => ({ ...s, closedSurveys: data, error: null }));
-                    closedLoaded = true; checkDone();
+                unsubClosed = onSnapshot(closedQuery, (snapshot) => {
+                    handleSnapshot(snapshot, 'closedSurveys', () => { closedLoaded = true; checkDone(); });
                 }, (error) => {
-                    console.error("Survey store error:", error);
                     update(s => ({ ...s, loading: false, error: error.message }));
                 });
 
-                unsubUploaded = onSnapshot(uploadedQuery, async (snapshot) => {
-                    const data = await Promise.all(snapshot.docs.map(async docSnapshot => {
-                        const s = { id: docSnapshot.id, ...docSnapshot.data() };
-                        try {
-                            const adminSnap = await getDoc(doc(db, 'surveys', docSnapshot.id, 'admin', 'metadata'));
-                            if (adminSnap.exists()) Object.assign(s, adminSnap.data());
-                        } catch (e) {
-                            console.warn("Failed to fetch admin data for survey", docSnapshot.id, e);
-                        }
-                        return s;
-                    }));
-                    update(s => ({ ...s, uploadedSurveys: data, error: null }));
-                    uploadedLoaded = true; checkDone();
+                unsubUploaded = onSnapshot(uploadedQuery, (snapshot) => {
+                    handleSnapshot(snapshot, 'uploadedSurveys', () => { uploadedLoaded = true; checkDone(); });
                 }, (error) => {
-                    console.error("Survey store error:", error);
                     update(s => ({ ...s, loading: false, error: error.message }));
                 });
 
@@ -96,6 +105,8 @@ const createSurveyStore = () => {
                     if (unsubOpen) unsubOpen();
                     if (unsubClosed) unsubClosed();
                     if (unsubUploaded) unsubUploaded();
+                    adminUnsubs.forEach(unsub => unsub());
+                    adminUnsubs.clear();
                 };
             }
         },

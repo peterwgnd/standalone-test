@@ -43,6 +43,7 @@
         border: none;
         border-radius: 8px;
         font-family: var(--font-heading);
+        font-size: .8333rem;
         font-weight: 500;
         cursor: pointer;
         display: inline-flex;
