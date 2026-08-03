@@ -68,12 +68,12 @@ terraform init -reconfigure -backend-config="bucket=${STATE_BUCKET}"
 export TF_VAR_project_id="${PROJECT_ID}"
 
 # Securely create secret shell & inject Gemini API key version via gcloud (keeps sensitive key out of terraform.tfstate)
-if ! gcloud secrets describe gemini-api-key --quiet >/dev/null 2>&1; then
-  echo "🔑 Creating Secret Manager secret gemini-api-key..."
-  gcloud secrets create gemini-api-key --replication-policy="automatic" --quiet
+if ! gcloud secrets describe GEMINI_API_KEY --quiet >/dev/null 2>&1; then
+  echo "🔑 Creating Secret Manager secret GEMINI_API_KEY..."
+  gcloud secrets create GEMINI_API_KEY --replication-policy="automatic" --quiet
 fi
 echo "🔑 Injecting Gemini API key into Secret Manager..."
-echo -n "${GEMINI_KEY}" | gcloud secrets versions add gemini-api-key --data-file=- --quiet
+echo -n "${GEMINI_KEY}" | gcloud secrets versions add GEMINI_API_KEY --data-file=- --quiet
 
 echo "🔍 Checking for pre-existing resources to auto-import..."
 
@@ -91,9 +91,9 @@ if gcloud artifacts repositories describe standalone-analytics-repo --location="
 fi
 
 # Auto-heal: Secret Manager
-if gcloud secrets describe gemini-api-key --quiet >/dev/null 2>&1; then
+if gcloud secrets describe GEMINI_API_KEY --quiet >/dev/null 2>&1; then
   echo "   - Importing Secret Manager Secret..."
-  terraform import google_secret_manager_secret.gemini_api_key "projects/${PROJECT_ID}/secrets/gemini-api-key" >/dev/null 2>&1 || true
+  terraform import google_secret_manager_secret.gemini_api_key "projects/${PROJECT_ID}/secrets/GEMINI_API_KEY" >/dev/null 2>&1 || true
 fi
 
 # Auto-heal: Cloud Run Job

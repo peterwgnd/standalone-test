@@ -44,7 +44,6 @@
     }
   ],
   "hosting": {
-    "site": "standalone-sensemaking",
     "public": "front-end/build",
     "predeploy": [
       "npm --prefix front-end run build"

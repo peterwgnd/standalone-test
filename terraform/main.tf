@@ -21,7 +21,7 @@ resource "google_project_iam_member" "cloudbuild_push" {
 
 # 2. Secret Manager Shell for Gemini API Key
 resource "google_secret_manager_secret" "gemini_api_key" {
-  secret_id = "gemini-api-key"
+  secret_id = "GEMINI_API_KEY"
   
   replication {
     auto {}
