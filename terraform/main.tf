@@ -68,7 +68,7 @@ resource "google_firebase_project" "default" {
 # 6. Create the Firebase Storage Bucket
 resource "google_storage_bucket" "default" {
   provider                    = google-beta
-  name                        = "${var.project_id}.firebasestorage.app"
+  name                        = "${var.project_id}-firebasestorage"
   location                    = var.region
   uniform_bucket_level_access = true
   depends_on                  = [time_sleep.wait_60_seconds]
