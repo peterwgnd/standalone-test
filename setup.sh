@@ -33,6 +33,8 @@ fi
 
 # Ensure project is set in gcloud so subsequent commands work seamlessly
 gcloud config set project $PROJECT_ID
+gcloud config set billing/quota_project $PROJECT_ID 2>/dev/null || true
+export GOOGLE_CLOUD_QUOTA_PROJECT=$PROJECT_ID
 
 read -p "2. Enter your Google account email (for Global Admin access): " ADMIN_EMAIL
 
@@ -125,12 +127,6 @@ if gcloud app describe --quiet >/dev/null 2>&1; then
   terraform import google_firebase_storage_bucket.default "${PROJECT_ID}/${PROJECT_ID}.appspot.com" >/dev/null 2>&1 || true
 fi
 
-# Auto-heal: Identity Platform (Firebase Authentication)
-if gcloud services list --enabled --quiet | grep -q "identitytoolkit.googleapis.com"; then
-  echo "   - Importing Identity Platform (Firebase Auth) Configuration..."
-  terraform import google_identity_platform_config.default "projects/${PROJECT_ID}/config" >/dev/null 2>&1 || true
-fi
-
 # Provision infrastructure
 echo "🚀 Applying Terraform configuration (with auto-retry)..."
 MAX_RETRIES=3
@@ -138,15 +134,24 @@ RETRY_COUNT=0
 until terraform apply -auto-approve; do
   RETRY_COUNT=$((RETRY_COUNT+1))
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    echo "❌ Terraform provisioning failed after ${MAX_RETRIES} attempts. Please check your network connection and try again."
+    echo "❌ Terraform provisioning failed after ${MAX_RETRIES} attempts."
+    echo "👉 Please check the error message above. Common causes:"
+    echo "   - Expired Google login: run 'gcloud auth login' and retry."
+    echo "   - Missing permissions: ensure your account has Editor/Owner rights on this project."
     exit 1
   fi
-  echo "⚠️ Network interruption detected during Terraform apply. Automatically retrying in 5 seconds (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
+  echo "⚠️ Terraform step did not complete on attempt ${RETRY_COUNT}. Automatically retrying in 5 seconds ($((RETRY_COUNT+1))/${MAX_RETRIES})..."
   sleep 5
 done
 
-# Automatically enable Google Sign-In in Firebase Authentication (no OAuth client ID/secret required)
-echo "🔑 Enabling Google Sign-In authentication provider..."
+# Automatically initialize Firebase Authentication & enable Google Sign-In (bypasses Terraform Cloud Shell ADC quota limits)
+echo "🔑 Initializing Firebase Authentication & Google Sign-In..."
+curl -s -X PATCH \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" \
+  -d '{"signIn": {"allowDuplicateEmails": false}}' \
+  "https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT_ID}/config?updateMask=signIn.allowDuplicateEmails" >/dev/null 2>&1 || true
+
 curl -s -X PATCH \
   -H "Authorization: Bearer $(gcloud auth print-access-token)" \
   -H "Content-Type: application/json" \
@@ -165,10 +170,11 @@ RETRY_COUNT=0
 until gcloud builds submit --tag ${IMAGE_URL} .; do
   RETRY_COUNT=$((RETRY_COUNT+1))
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    echo "❌ Cloud Build failed after ${MAX_RETRIES} attempts. Please check your network connection and try again."
+    echo "❌ Cloud Build failed after ${MAX_RETRIES} attempts."
+    echo "👉 Please check the log output above for container syntax or project permission errors, then retry."
     exit 1
   fi
-  echo "⚠️ Network interruption detected during Docker build. Automatically retrying in 5 seconds (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
+  echo "⚠️ Cloud Build step did not complete on attempt ${RETRY_COUNT}. Automatically retrying in 5 seconds ($((RETRY_COUNT+1))/${MAX_RETRIES})..."
   sleep 5
 done
 
@@ -235,10 +241,11 @@ RETRY_COUNT=0
 until firebase deploy --project "${PROJECT_ID}" --force --non-interactive; do
   RETRY_COUNT=$((RETRY_COUNT+1))
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    echo "❌ Deployment failed after ${MAX_RETRIES} attempts. Please check your network connection and try again."
+    echo "❌ Firebase deployment failed after ${MAX_RETRIES} attempts."
+    echo "👉 Please check the error message above (common causes: temporary upload timeout or permissions), then retry."
     exit 1
   fi
-  echo "⚠️ Network interruption detected during deploy. Automatically retrying in 5 seconds (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
+  echo "⚠️ Firebase deploy step did not complete on attempt ${RETRY_COUNT}. Automatically retrying in 5 seconds ($((RETRY_COUNT+1))/${MAX_RETRIES})..."
   sleep 5
 done
 

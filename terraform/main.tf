@@ -97,17 +97,6 @@ resource "google_firebase_storage_bucket" "default" {
   depends_on = [google_firebase_project.default]
 }
 
-# 6.5. Initialize Firebase Authentication (Identity Platform)
-resource "google_identity_platform_config" "default" {
-  provider   = google-beta
-  project    = var.project_id
-  depends_on = [time_sleep.wait_60_seconds]
-
-  sign_in {
-    allow_duplicate_emails = false
-  }
-}
-
 # 7. Create the Firebase Web App
 resource "google_firebase_web_app" "svelte_app" {
   provider     = google-beta
