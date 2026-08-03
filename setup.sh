@@ -18,24 +18,28 @@ fi
 
 # 1. Collect User Inputs
 echo "--------------------------------------------------------"
-echo "We need a few details to configure your environment."
+echo "👋 We need 3 quick details to configure your environment:"
 echo "--------------------------------------------------------"
 
 # Try to get the active project, if any
 DEFAULT_PROJECT_ID=$(gcloud config get-value project 2>/dev/null || true)
 
 if [ -z "$DEFAULT_PROJECT_ID" ]; then
-    read -p "Enter your Google Cloud Project ID: " PROJECT_ID
+    read -p "1. Enter your Google Cloud Project ID: " PROJECT_ID
 else
-    read -p "Enter your Google Cloud Project ID [$DEFAULT_PROJECT_ID]: " INPUT_PROJECT_ID
+    read -p "1. Google Cloud Project ID [Press Enter to use '$DEFAULT_PROJECT_ID']: " INPUT_PROJECT_ID
     PROJECT_ID=${INPUT_PROJECT_ID:-$DEFAULT_PROJECT_ID}
 fi
 
 # Ensure project is set in gcloud so subsequent commands work seamlessly
 gcloud config set project $PROJECT_ID
 
-read -p "Enter your Google account email (this will be the Admin): " ADMIN_EMAIL
-read -p "Enter your Gemini API Key: " GEMINI_KEY
+read -p "2. Enter your Google account email (for Global Admin access): " ADMIN_EMAIL
+
+echo ""
+echo "👉 Need a free Gemini API key? Get one in seconds at: https://aistudio.google.com/app/apikey"
+read -p "3. Enter your Gemini API Key: " GEMINI_KEY
+echo ""
 
 # 2. Define Variables
 REGION="us-central1"
@@ -122,8 +126,18 @@ if gcloud app describe --quiet >/dev/null 2>&1; then
 fi
 
 # Provision infrastructure
-echo "🚀 Applying Terraform configuration..."
-terraform apply -auto-approve
+echo "🚀 Applying Terraform configuration (with auto-retry)..."
+MAX_RETRIES=3
+RETRY_COUNT=0
+until terraform apply -auto-approve; do
+  RETRY_COUNT=$((RETRY_COUNT+1))
+  if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+    echo "❌ Terraform provisioning failed after ${MAX_RETRIES} attempts. Please check your network connection and try again."
+    exit 1
+  fi
+  echo "⚠️ Network interruption detected during Terraform apply. Automatically retrying in 5 seconds (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
+  sleep 5
+done
 
 # Extract the Registry URL for the Docker push
 REPO_URL=$(terraform output -raw artifact_registry_url)
@@ -131,8 +145,18 @@ IMAGE_URL="${REPO_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
 cd ..
 
 # 4. Build & Push Docker Image
-echo "🐳 Building and pushing the Docker image via Cloud Build..."
-gcloud builds submit --tag ${IMAGE_URL} .
+echo "🐳 Building and pushing the Docker image via Cloud Build (with auto-retry)..."
+MAX_RETRIES=3
+RETRY_COUNT=0
+until gcloud builds submit --tag ${IMAGE_URL} .; do
+  RETRY_COUNT=$((RETRY_COUNT+1))
+  if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+    echo "❌ Cloud Build failed after ${MAX_RETRIES} attempts. Please check your network connection and try again."
+    exit 1
+  fi
+  echo "⚠️ Network interruption detected during Docker build. Automatically retrying in 5 seconds (attempt $((RETRY_COUNT+1))/${MAX_RETRIES})..."
+  sleep 5
+done
 
 # 5. Swap the Dummy Image
 echo "🔄 Updating Cloud Run Job with the compiled image..."
