@@ -48,10 +48,32 @@ echo "⚙️  Configuring backend with Admin Email..."
 echo "ADMIN_EMAIL=${ADMIN_EMAIL}" > functions/.env
 
 # 3. Infrastructure as Code (Terraform)
-echo "🏗️  Provisioning foundation with Terraform..."
+echo "🏗️  Setting up Terraform Remote State..."
+
+# Define a unique bucket name for state storage
+STATE_BUCKET="${PROJECT_ID}-tfstate"
+
+# Create GCS bucket for state if it doesn't exist
+if ! gcloud storage buckets describe "gs://${STATE_BUCKET}" >/dev/null 2>&1; then
+  echo "📦 Creating state bucket gs://${STATE_BUCKET}..."
+  gcloud storage buckets create "gs://${STATE_BUCKET}" --location="${REGION}" --uniform-bucket-level-access
+fi
+
 cd terraform
-terraform init
-# Provision everything and inject the Gemini Key into the Secret Version
+
+# Initialize backend dynamically pointing to the state bucket
+terraform init -reconfigure -backend-config="bucket=${STATE_BUCKET}"
+
+# Auto-heal: If the Service Account exists in GCP but not in state, import it
+SA_EMAIL="analytics-orchestrator-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+if gcloud iam service-accounts describe "${SA_EMAIL}" >/dev/null 2>&1; then
+  echo "🔍 Service account already exists in GCP. Ensuring it is tracked in Terraform state..."
+  terraform import -var="gemini_api_key=${GEMINI_KEY}" -var="project_id=${PROJECT_ID}" \
+    google_service_account.cloud_run_sa "projects/${PROJECT_ID}/serviceAccounts/${SA_EMAIL}" >/dev/null 2>&1 || true
+fi
+
+# Provision infrastructure
+echo "🚀 Applying Terraform configuration..."
 terraform apply -auto-approve -var="gemini_api_key=${GEMINI_KEY}" -var="project_id=${PROJECT_ID}"
 
 # Extract the Registry URL for the Docker push
