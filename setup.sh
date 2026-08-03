@@ -146,14 +146,18 @@ done
 
 # Automatically initialize Firebase Authentication & enable Google Sign-In (bypasses Terraform Cloud Shell ADC quota limits)
 echo "🔑 Initializing Firebase Authentication & Google Sign-In..."
+AUTH_TOKEN=$(gcloud auth application-default print-access-token 2>/dev/null || gcloud auth print-access-token 2>/dev/null)
+
 curl -s -X PATCH \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "x-goog-user-project: ${PROJECT_ID}" \
   -H "Content-Type: application/json" \
   -d '{"signIn": {"allowDuplicateEmails": false}}' \
   "https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT_ID}/config?updateMask=signIn.allowDuplicateEmails" >/dev/null 2>&1 || true
 
 curl -s -X PATCH \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "x-goog-user-project: ${PROJECT_ID}" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}' \
   "https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT_ID}/defaultSupportedIdpConfigs/google.com?updateMask=enabled" >/dev/null 2>&1 || true
@@ -186,6 +190,9 @@ gcloud run jobs update ${JOB_NAME} \
 
 # 6. Deploy Frontend and Functions
 echo "📦 Installing Frontend and Cloud Functions dependencies..."
+# Automatically clear pip, gcloud, and npm caches to prevent Cloud Shell 5GB ENOSPC disk exhaustion
+npm cache clean --force >/dev/null 2>&1 || true
+rm -rf ~/.cache/pip ~/.cache/gcloud ~/.local/share/Trash /tmp/* >/dev/null 2>&1 || true
 (cd front-end && rm -rf node_modules && npm install)
 (cd functions && rm -rf node_modules && npm install)
 
