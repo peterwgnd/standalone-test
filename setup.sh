@@ -148,27 +148,53 @@ echo "📦 Installing Frontend and Cloud Functions dependencies..."
 echo "🌐 Fetching Firebase client SDK configuration..."
 echo "{\"projects\":{\"default\":\"${PROJECT_ID}\"}}" > .firebaserc
 
-SDK_CONFIG=$(firebase apps:sdkconfig WEB --json --project="${PROJECT_ID}")
-node -e '
-  const data = JSON.parse(process.argv[1]);
-  const cfg = data.result ? (data.result.sdkConfig || data.result) : data;
-  const fs = require("fs");
-  fs.writeFileSync("front-end/src/firebase-config.json", JSON.stringify(cfg, null, 2));
-  const envContent = [
-    `VITE_FIREBASE_API_KEY=${cfg.apiKey || ""}`,
-    `VITE_FIREBASE_AUTH_DOMAIN=${cfg.authDomain || ""}`,
-    `VITE_FIREBASE_DATABASE_URL=${cfg.databaseURL || ""}`,
-    `VITE_FIREBASE_PROJECT_ID=${cfg.projectId || ""}`,
-    `VITE_FIREBASE_STORAGE_BUCKET=${cfg.storageBucket || ""}`,
-    `VITE_FIREBASE_MESSAGING_SENDER_ID=${cfg.messagingSenderId || ""}`,
-    `VITE_FIREBASE_APP_ID=${cfg.appId || ""}`
-  ].join("\n");
-  fs.writeFileSync("front-end/.env", envContent);
-' "$SDK_CONFIG"
+APP_ID=$(firebase apps:list WEB --json --project="${PROJECT_ID}" 2>/dev/null | node -e '
+  let d = "";
+  process.stdin.on("data", c => d += c);
+  process.stdin.on("end", () => {
+    try {
+      const parsed = JSON.parse(d);
+      const apps = parsed.result ? parsed.result : parsed;
+      if (Array.isArray(apps) && apps.length > 0) {
+        console.log(apps[0].appId);
+      }
+    } catch(e) {}
+  });
+' || true)
+
+if [ -n "$APP_ID" ]; then
+  firebase apps:sdkconfig WEB "$APP_ID" --json --project="${PROJECT_ID}" 2>/dev/null | node -e '
+    let d = "";
+    process.stdin.on("data", c => d += c);
+    process.stdin.on("end", () => {
+      try {
+        const data = JSON.parse(d);
+        const cfg = data.result ? (data.result.sdkConfig || data.result) : data;
+        const fs = require("fs");
+        fs.writeFileSync("front-end/src/firebase-config.json", JSON.stringify(cfg, null, 2));
+        const envContent = [
+          `VITE_FIREBASE_API_KEY=${cfg.apiKey || ""}`,
+          `VITE_FIREBASE_AUTH_DOMAIN=${cfg.authDomain || ""}`,
+          `VITE_FIREBASE_DATABASE_URL=${cfg.databaseURL || ""}`,
+          `VITE_FIREBASE_PROJECT_ID=${cfg.projectId || ""}`,
+          `VITE_FIREBASE_STORAGE_BUCKET=${cfg.storageBucket || ""}`,
+          `VITE_FIREBASE_MESSAGING_SENDER_ID=${cfg.messagingSenderId || ""}`,
+          `VITE_FIREBASE_APP_ID=${cfg.appId || ""}`
+        ].join("\n");
+        fs.writeFileSync("front-end/.env", envContent);
+      } catch(e) {
+        console.error("Warning: Could not parse SDK config JSON:", e.message);
+      }
+    });
+  ' || true
+else
+  echo "⚠️ Warning: Could not detect Web App ID automatically. Continuing deploy..."
+fi
 
 echo "🌐 Deploying Svelte Admin UI and Cloud Functions..."
 firebase deploy --project "${PROJECT_ID}"
 
 echo "--------------------------------------------------------"
-echo "✅ Deployment complete! Your Standalone Analytics Platform is live."
+echo "✅ Deployment complete! Your Standalone Analytics Platform is live:"
+echo "👉 Admin UI URL: https://${PROJECT_ID}.web.app"
 echo "--------------------------------------------------------"
