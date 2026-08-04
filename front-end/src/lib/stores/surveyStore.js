@@ -79,7 +79,21 @@ const createSurveyStore = () => {
                         return s;
                     }));
                     
-                    update(s => ({ ...s, [storeKey]: data, error: null }));
+                    update(s => {
+                        const nextState = { ...s, [storeKey]: data, error: null };
+                        const activeIds = new Set([
+                            ...nextState.openSurveys.map(item => item.id),
+                            ...nextState.closedSurveys.map(item => item.id),
+                            ...nextState.uploadedSurveys.map(item => item.id)
+                        ]);
+                        for (const [id, unsub] of adminUnsubs.entries()) {
+                            if (!activeIds.has(id)) {
+                                unsub();
+                                adminUnsubs.delete(id);
+                            }
+                        }
+                        return nextState;
+                    });
                     loadCallback();
                 };
 

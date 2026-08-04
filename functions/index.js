@@ -5,7 +5,7 @@ const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 const { defineSecret } = require("firebase-functions/params");
 
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -65,19 +65,14 @@ function buildPrompt(prior_question, prior_response, task_prompt) {
 async function generateContentWithRetry(prompt, maxRetries = 3, initialDelay = 1000) {
     let attempt = 0;
     const apiKey = geminiApiKey.value() || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-    const ai = new GoogleGenerativeAI(apiKey);
-    const model = ai.getGenerativeModel({
-        model: "gemini-3.5-flash",
-        generationConfig: {
-            thinkingConfig: {
-                thinkingBudget: 0
-            }
-        }
-    });
+    const ai = new GoogleGenAI({ apiKey });
 
     while (attempt <= maxRetries) {
         try {
-            return await model.generateContent(prompt);
+            return await ai.models.generateContent({
+                model: "gemini-3.5-flash",
+                contents: prompt
+            });
         } catch (e) {
             attempt++;
             if (attempt > maxRetries) throw e;
@@ -152,32 +147,23 @@ exports.generateFollowUp = onDocumentWritten({
     // CLAIM THE WORK IMMEDIATELY TO PREVENT RACE CONDITIONS
     await snapshot.ref.update({ status: `generatingFollowUp_Q${currentQuestionIndex}` });
 
-    let taskPromptText = "";
+    const db = getFirestore("standalone");
+    const adminRef = db.collection("surveys").doc(surveySlug).collection("admin").doc("metadata");
+    const adminDoc = await adminRef.get();
 
-    // 1. Check if taskPrompt is passed in the response document itself (most cost-effective)
-    if (data.taskPrompt) {
-        taskPromptText = data.taskPrompt;
+    if (!adminDoc.exists) {
+        logger.warn(`Admin metadata doc for '${surveySlug}' does not exist, falling back to default prompt.`);
     }
-    // 2. Fallback to fetching it from the admin metadata dynamically to ensure freshness
-    else {
-        const db = getFirestore("standalone");
-        const adminRef = db.collection("surveys").doc(surveySlug).collection("admin").doc("metadata");
-        const adminDoc = await adminRef.get();
 
-        if (!adminDoc.exists) {
-            logger.warn(`Admin metadata doc for '${surveySlug}' does not exist, falling back to default prompt.`);
-        }
-
-        const adminData = adminDoc.exists ? adminDoc.data() : {};
-        taskPromptText = adminData.taskPrompt || "Think about what specific changes or new rules might help address the ideas they just shared.";
-    }
+    const adminData = adminDoc.exists ? adminDoc.data() : {};
+    const taskPromptText = adminData.taskPrompt || "Think about what specific changes or new rules might help address the ideas they just shared.";
 
     const prompt = buildPrompt(currentAnswerObj.question, currentAnswerObj.answer, taskPromptText);
 
     try {
         console.log(`Generating follow-up question for Survey:${surveySlug} Response:${id} QIndex:${currentQuestionIndex}...`);
         const result = await generateContentWithRetry(prompt);
-        const followUpQuestion = result.response.text().trim();
+        const followUpQuestion = (result.text || (result.response && typeof result.response.text === "function" ? result.response.text() : "")).trim();
 
         // Update with dot notation for specific map key
         const updateObj = {};
@@ -226,7 +212,7 @@ exports.triggerAnalyticsPipeline = onCall({ region: "us-central1" }, async (requ
 
         const runClient = new JobsClient();
         const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || "{}").projectId;
-        const name = runClient.jobPath(projectId, "us-central1", "survey-orchestrator");
+        const name = runClient.jobPath(projectId, "us-central1", "analytics-orchestrator-job");
 
         // Use a unique output directory per execution to prevent checkpoint 
         // bleeding across reused Cloud Run instances.
@@ -291,8 +277,12 @@ exports.cancelAnalyticsPipeline = onCall({ region: "us-central1" }, async (reque
         }
 
         const execClient = new ExecutionsClient();
-        await execClient.cancelExecution({ name: executionName });
-        logger.info(`Successfully cancelled Cloud Run Job execution for slug ${slug}: ${executionName}`);
+        const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || "{}").projectId;
+        const fullExecutionName = executionName.startsWith("projects/")
+            ? executionName
+            : `projects/${projectId}/locations/us-central1/jobs/analytics-orchestrator-job/executions/${executionName}`;
+        await execClient.cancelExecution({ name: fullExecutionName });
+        logger.info(`Successfully cancelled Cloud Run Job execution for slug ${slug}: ${fullExecutionName}`);
 
         // Update telemetry to Canceled
         await adminRef.update({
@@ -308,7 +298,7 @@ exports.cancelAnalyticsPipeline = onCall({ region: "us-central1" }, async (reque
     }
 });
 
-exports.deleteSurvey = onCall({ region: "us-central1" }, async (request) => {
+exports.deleteSurvey = onCall({ region: "us-central1", timeoutSeconds: 540 }, async (request) => {
     if (!request.auth || !request.auth.token.admin) {
         throw new HttpsError("permission-denied", "You must be an admin to perform this action.");
     }
@@ -328,21 +318,17 @@ exports.deleteSurvey = onCall({ region: "us-central1" }, async (request) => {
         const reportsPrefix = `reports/${slug}/`;
         const uploadsPrefix = `uploads/${slug}/`;
 
-        // 2. Run deletion asynchronously without awaiting
-        Promise.all([
+        // 2. Await deletions so serverless runtime doesn't terminate container mid-deletion
+        await Promise.all([
             bucket.deleteFiles({ prefix: reportsPrefix }).catch(e => logger.warn(`Warning deleting reports for ${slug}:`, e)),
             bucket.deleteFiles({ prefix: uploadsPrefix }).catch(e => logger.warn(`Warning deleting uploads for ${slug}:`, e))
-        ]).then(() => {
-            const surveyRef = db.collection("surveys").doc(slug);
-            return db.recursiveDelete(surveyRef);
-        }).then(() => {
-            logger.info(`Successfully performed deep deletion for survey: ${slug}`);
-        }).catch((e) => {
-            logger.error(`Failed to delete survey ${slug} in background:`, e);
-        });
+        ]);
 
-        // Return immediately to avoid browser timeouts on large surveys
-        return { success: true, status: "deletion_started" };
+        const surveyRef = db.collection("surveys").doc(slug);
+        await db.recursiveDelete(surveyRef);
+        logger.info(`Successfully performed deep deletion for survey: ${slug}`);
+
+        return { success: true, status: "deletion_completed" };
     } catch (e) {
         logger.error(`Failed to trigger survey deletion for ${slug}:`, e);
         throw new HttpsError("internal", `Failed to trigger survey deletion: ${e.message}`);

@@ -8,6 +8,7 @@ import shutil
 import sys
 import json
 import time
+import threading
 import google.auth
 from typing import List
 
@@ -78,6 +79,60 @@ def update_telemetry(db, survey_slug: str, status_msg: str, is_complete: bool = 
         _LAST_TELEMETRY_UPDATE = time.time()
     except Exception as e:
         logging.warning(f"Failed to update telemetry: {e}")
+
+class TelemetryHeartbeat:
+    """Background daemon thread that periodically updates Firestore telemetry
+    so long-running steps don't appear as FAILED_ZOMBIE in the UI.
+    Also inspects checkpoint files during categorization to provide accurate progress.
+    """
+    def __init__(self, db, survey_slug: str, output_dir: str, skip_quote_extraction: bool = False, skip_autoraters: bool = False, interval_seconds: int = 60):
+        self.db = db
+        self.survey_slug = survey_slug
+        self.output_dir = output_dir
+        self.skip_quote_extraction = skip_quote_extraction
+        self.skip_autoraters = skip_autoraters
+        self.interval_seconds = interval_seconds
+        self._stop_event = threading.Event()
+        self._thread = None
+        self._current_step = ""
+        self._in_categorization = False
+
+    def set_step(self, step_msg: str, in_categorization: bool = False):
+        self._current_step = step_msg
+        self._in_categorization = in_categorization
+        update_telemetry(self.db, self.survey_slug, step_msg)
+
+    def _get_categorization_progress_msg(self) -> str:
+        checkpoint_dir = os.path.join(self.output_dir, ".checkpoints")
+        if not os.path.exists(checkpoint_dir):
+            return "Categorizing: modeling topics..."
+        
+        if os.path.exists(os.path.join(checkpoint_dir, "statements_with_topics_and_learned_topics.pkl")):
+            if not self.skip_quote_extraction and not os.path.exists(os.path.join(checkpoint_dir, "statements_with_quotes.pkl")):
+                return "Categorizing: extracting quotes..."
+            elif not os.path.exists(os.path.join(checkpoint_dir, "statements_with_opinions.pkl")):
+                return "Categorizing: identifying opinions..."
+            elif not self.skip_autoraters and not os.path.exists(os.path.join(checkpoint_dir, "statements_with_autorater_scores.pkl")):
+                return "Categorizing: evaluating output..."
+            else:
+                return "Categorizing: finalizing output..."
+        return "Categorizing: modeling topics..."
+
+    def start(self):
+        def _run():
+            while not self._stop_event.wait(self.interval_seconds):
+                if self._in_categorization:
+                    msg = self._get_categorization_progress_msg()
+                    update_telemetry(self.db, self.survey_slug, msg)
+                elif self._current_step:
+                    update_telemetry(self.db, self.survey_slug, self._current_step)
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
 
 def sync_state_from_bucket(bucket, survey_slug: str, output_dir: str):
     """Pulls existing checkpoints and intermediate files from GCS to local output_dir."""
@@ -166,6 +221,7 @@ def main():
     
     logging.info(f"Starting Survey Analytics Orchestrator for slug: {args.survey_slug}")
     logging.info(f"Pipeline Config: model={args.model_name}, skip_autoraters={args.skip_autoraters}, skip_quote_extraction={args.skip_quote_extraction}, topics_specified={bool(args.topics)}")
+    heartbeat = None
     
     # 0. Connect to GCP and Prep Data
     try:
@@ -266,7 +322,16 @@ def main():
         
     
         # 1. Step 1: Categorization
-        update_telemetry(db, args.survey_slug, "Categorizing responses...")
+        heartbeat = TelemetryHeartbeat(
+            db=db,
+            survey_slug=args.survey_slug,
+            output_dir=args.output_dir,
+            skip_quote_extraction=args.skip_quote_extraction,
+            skip_autoraters=args.skip_autoraters,
+            interval_seconds=60,
+        )
+        heartbeat.start()
+        heartbeat.set_step("Categorizing: modeling topics...", in_categorization=True)
         ste_name_cat = "categorization_done"
         checkpoint_cat = checkpoint_utils.load_checkpoint(ste_name_cat, args.output_dir)
     
@@ -303,7 +368,10 @@ def main():
             sync_state_to_bucket(bucket, args.survey_slug, args.output_dir, admin_ref)
 
         # 2. Step 2: Report Text Generation
-        update_telemetry(db, args.survey_slug, "Drafting report...")
+        if heartbeat:
+            heartbeat.set_step("Drafting report...", in_categorization=False)
+        else:
+            update_telemetry(db, args.survey_slug, "Drafting report...")
         ste_name_rep = "report_generation_done"
         checkpoint_rep = checkpoint_utils.load_checkpoint(ste_name_rep, args.output_dir)
     
@@ -341,7 +409,10 @@ def main():
             sync_state_to_bucket(bucket, args.survey_slug, args.output_dir, admin_ref)
 
         # 3. Step 3: Node-based HTML Generation
-        update_telemetry(db, args.survey_slug, "Building interactive layout...")
+        if heartbeat:
+            heartbeat.set_step("Building interactive layout...", in_categorization=False)
+        else:
+            update_telemetry(db, args.survey_slug, "Building interactive layout...")
         ste_name_html = "html_generation_done"
         checkpoint_html = checkpoint_utils.load_checkpoint(ste_name_html, args.output_dir)
     
@@ -370,15 +441,15 @@ def main():
         
             # Hydrate explicit config payload
             config_payload = {
-                "title": survey_data.get("name", "Survey Results"),
-                "overview_chart": survey_data.get("overview_chart", "toggle"),
-                "excludedTopics": survey_data.get("excludedTopics", []),
-                "excludedOpinions": survey_data.get("excludedOpinions", []),
-                "number_of_top_opinions": survey_data.get("number_of_top_opinions", 10),
-                "number_of_sample_quotes": survey_data.get("number_of_sample_quotes", 4)
+                "title": survey_data.get("title", survey_data.get("name", "Survey Results")),
+                "overview_chart": admin_data.get("overview_chart", "toggle"),
+                "excludedTopics": admin_data.get("excludedTopics", []),
+                "excludedOpinions": admin_data.get("excludedOpinions", []),
+                "number_of_top_opinions": admin_data.get("number_of_top_opinions", 10),
+                "number_of_sample_quotes": admin_data.get("number_of_sample_quotes", 4)
             }
-            if "logo" in survey_data and survey_data["logo"]:
-                config_payload["logo"] = survey_data["logo"]
+            if "logo" in admin_data and admin_data["logo"]:
+                config_payload["logo"] = admin_data["logo"]
             
             config_path = os.path.join(sandbox_input_dir, "config.json")
             with open(config_path, "w") as f:
@@ -401,7 +472,10 @@ def main():
                 sys.exit(1)
 
         # 4. Final Push
-        update_telemetry(db, args.survey_slug, "Publishing report to Cloud Storage...")
+        if heartbeat:
+            heartbeat.set_step("Publishing report to Cloud Storage...", in_categorization=False)
+        else:
+            update_telemetry(db, args.survey_slug, "Publishing report to Cloud Storage...")
     
         try:
             bucket = stor.bucket(default_bucket_name)
@@ -417,6 +491,8 @@ def main():
             update_telemetry(db, args.survey_slug, "Failed to publish report", is_complete=True)
             sys.exit(1)
         
+        if heartbeat:
+            heartbeat.stop()
         update_telemetry(db, args.survey_slug, "Complete", is_complete=True)
         logging.info("Survey Analytics Pipeline Finished!")
 
@@ -424,6 +500,12 @@ def main():
         logging.error(f"Fatal error in pipeline: {e}", exc_info=True)
         update_telemetry(db, args.survey_slug, f"Failed: {e}", is_complete=True)
         sys.exit(1)
+    finally:
+        if "heartbeat" in locals() and heartbeat:
+            heartbeat.stop()
+        if os.path.exists(args.output_dir):
+            shutil.rmtree(args.output_dir, ignore_errors=True)
+            logging.info(f"Cleaned up temporary output directory: {args.output_dir}")
 
 if __name__ == "__main__":
     main()

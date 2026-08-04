@@ -90,7 +90,7 @@
             if (!isNaN(updatedTime.getTime())) {
                 const now = new Date(Date.now() + serverTimeOffset);
                 const diffMinutes = (now - updatedTime) / (1000 * 60);
-                if (Math.abs(diffMinutes) > 15) {
+                if (diffMinutes > 15) {
                     return 'FAILED_ZOMBIE';
                 }
                 return 'RUNNING';

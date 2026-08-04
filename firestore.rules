@@ -16,18 +16,19 @@ service cloud.firestore {
     match /surveys/{surveySlug} {
       
       // 1. Survey Configuration
-      // Public can read (needed to load the survey title/questions for respondents)
-      allow read: if true;
+      // Public can read integrated surveys (needed to load questions for respondents); uploaded surveys are admin-only
+      allow read: if resource.data.type == 'integrated' || isAdmin();
       // Only admins can create/edit survey configurations
       allow write: if isAdmin();
 
       // 2. Responses Subcollection
       match /responses/{responseId} {
-        // Public can submit new responses
-        allow create: if true;
+        // Public can submit or update responses, but restrict map sizes to prevent Denial of Wallet bloating
+        allow create, update: if request.resource.data.size() < 20
+                              && (!('answers' in request.resource.data) || request.resource.data.answers.size() < 100);
         
-        // Allow a user to read or update a specific document if they know the exact random ID
-        allow get, update: if true;
+        // Allow a user to read a specific document if they know the exact random ID
+        allow get: if true;
         
         // ONLY Admins can query the whole collection to see everyone's data or delete responses
         allow list, delete: if isAdmin();

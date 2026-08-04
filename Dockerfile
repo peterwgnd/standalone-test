@@ -18,7 +18,8 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 # Pull the latest 'src' directly from the public repository
 RUN git clone --depth 1 https://github.com/Jigsaw-Code/sensemaking-tools.git /tmp/repo \
     && mv /tmp/repo/src /app/src \
-    && rm -rf /tmp/repo
+    && rm -rf /tmp/repo \
+    && cd /app/src/report_ui && npm install
 
 # Copy the application files
 COPY . .

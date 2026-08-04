@@ -1,4 +1,5 @@
 <script>
+    import { onMount } from "svelte";
     import { page } from "$app/state";
     import {
         doc,
@@ -16,8 +17,17 @@
 
     let slug = $derived(page.params.slug);
     let paramToken = $derived(page.url.searchParams.get("token"));
-    let sessionFallback = "anonymous-" + crypto.randomUUID();
+    let sessionFallback = $state("");
     let token = $derived(paramToken || sessionFallback);
+
+    onMount(() => {
+        let stored = sessionStorage.getItem("survey_token");
+        if (!stored) {
+            stored = "anonymous-" + crypto.randomUUID();
+            sessionStorage.setItem("survey_token", stored);
+        }
+        sessionFallback = stored;
+    });
 
     let survey = $state(null);
     let loading = $state(true);
@@ -39,6 +49,7 @@
     let followUpError = $state(false);
 
     $effect(() => {
+        if (!token) return;
         const loadSurvey = async () => {
             try {
                 loading = true;

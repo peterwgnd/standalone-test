@@ -62,6 +62,13 @@ resource "google_secret_manager_secret_iam_member" "secret_access" {
   member    = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# Grant the Service Account access to Cloud Storage
+resource "google_project_iam_member" "cloud_run_storage_admin" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
 # 4. Create the Firestore Database
 resource "google_firestore_database" "standalone" {
   project     = var.project_id
@@ -116,10 +123,18 @@ resource "google_cloud_run_v2_job" "analytics_orchestrator" {
 
   template {
     template {
+      timeout         = "86400s" # 24 hours
       service_account = google_service_account.cloud_run_sa.email
       
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello"
+
+        resources {
+          limits = {
+            memory = "4Gi"
+            cpu    = "2"
+          }
+        }
 
         env {
           name = "GEMINI_API_KEY"
@@ -144,7 +159,8 @@ resource "google_cloud_run_v2_job" "analytics_orchestrator" {
     google_artifact_registry_repository.app_repo,
     google_firestore_database.standalone,
     google_project_iam_member.firestore_access,
-    google_secret_manager_secret_iam_member.secret_access
+    google_secret_manager_secret_iam_member.secret_access,
+    google_project_iam_member.cloud_run_storage_admin
   ]
 }
 
