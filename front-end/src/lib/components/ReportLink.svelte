@@ -1,5 +1,5 @@
 <script>
-    import { ref, getDownloadURL } from 'firebase/storage';
+    import { ref, getBlob } from 'firebase/storage';
     import { storage } from '$lib/firebase/firebase-config';
     import { onMount } from 'svelte';
     import Button from '$lib/components/Button.svelte';
@@ -11,7 +11,8 @@
         if (gsUrl) {
             try {
                 const reportRef = ref(storage, gsUrl);
-                resolvedUrl = await getDownloadURL(reportRef);
+                const blob = await getBlob(reportRef);
+                resolvedUrl = URL.createObjectURL(blob);
             } catch (err) {
                 console.error("Failed to resolve report URL:", err);
             }

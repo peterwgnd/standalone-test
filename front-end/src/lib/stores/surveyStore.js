@@ -184,8 +184,15 @@ const createSurveyStore = () => {
             const adminRef = doc(db, 'surveys', surveySlug, 'admin', 'metadata');
             
             // Save config to Firestore right onto the Admin Metadata object
-            await setDoc(adminRef, configPayload, { merge: true });
-
+            // Optimistically reset telemetry so the UI doesn't show a stale 'Completed' state while Cloud Run spins up.
+            await setDoc(adminRef, {
+                ...configPayload,
+                telemetry: {
+                    status: 'Starting Cloud Run job...',
+                    is_complete: false,
+                    updated_at: serverTimestamp()
+                }
+            }, { merge: true });
             try {
                 const triggerAnalyticsPipelineFn = httpsCallable(functions, 'triggerAnalyticsPipeline');
                 await triggerAnalyticsPipelineFn({ 
