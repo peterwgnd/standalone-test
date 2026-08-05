@@ -67,6 +67,17 @@ const createSurveyStore = () => {
                         syncAdminMetadata(docSnapshot.id, storeKey);
                     });
 
+                    // Safely clean up listeners for documents that were removed from this query
+                    snapshot.docChanges().forEach(change => {
+                        if (change.type === 'removed') {
+                            const id = change.doc.id;
+                            if (adminUnsubs.has(id)) {
+                                adminUnsubs.get(id)();
+                                adminUnsubs.delete(id);
+                            }
+                        }
+                    });
+
                     // Initial fetch to prevent UI flickering
                     const data = await Promise.all(snapshot.docs.map(async docSnapshot => {
                         const s = { id: docSnapshot.id, ...docSnapshot.data() };
@@ -80,19 +91,7 @@ const createSurveyStore = () => {
                     }));
                     
                     update(s => {
-                        const nextState = { ...s, [storeKey]: data, error: null };
-                        const activeIds = new Set([
-                            ...nextState.openSurveys.map(item => item.id),
-                            ...nextState.closedSurveys.map(item => item.id),
-                            ...nextState.uploadedSurveys.map(item => item.id)
-                        ]);
-                        for (const [id, unsub] of adminUnsubs.entries()) {
-                            if (!activeIds.has(id)) {
-                                unsub();
-                                adminUnsubs.delete(id);
-                            }
-                        }
-                        return nextState;
+                        return { ...s, [storeKey]: data, error: null };
                     });
                     loadCallback();
                 };
