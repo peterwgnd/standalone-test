@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { collection, onSnapshot, query, setDoc, doc, Timestamp, getDoc, updateDoc, where, orderBy, limit, serverTimestamp, writeBatch, deleteField } from 'firebase/firestore';
+import { collection, onSnapshot, query, setDoc, doc, Timestamp, getDoc, updateDoc, where, orderBy, limit, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { db, storage, functions } from '../firebase/firebase-config';
@@ -185,20 +185,6 @@ const createSurveyStore = () => {
             
             // Save config to Firestore right onto the Admin Metadata object
             await setDoc(adminRef, configPayload, { merge: true });
-
-            // Set initial pending state to cover the Cloud Run cold start
-            const initialUpdates = {
-                telemetry: {
-                    status: "Initializing pipeline...",
-                    is_complete: false,
-                    updated_at: serverTimestamp()
-                }
-            };
-            if (purgeCheckpoints) {
-                initialUpdates.report_url = deleteField();
-                initialUpdates.intermediate_files = deleteField();
-            }
-            await setDoc(adminRef, initialUpdates, { merge: true });
 
             try {
                 const triggerAnalyticsPipelineFn = httpsCallable(functions, 'triggerAnalyticsPipeline');

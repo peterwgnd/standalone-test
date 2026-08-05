@@ -183,17 +183,18 @@
             const tokens = result.data.tokens;
             
             const host = window.location.origin;
-            const csvContent = "data:text/csv;charset=utf-8," 
-                + "Link\n"
+            const csvString = "Link\n"
                 + tokens.map(t => `${host}/${slug}/survey?token=${t}`).join("\n");
             
-            const encodedUri = encodeURI(csvContent);
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", url);
             link.setAttribute("download", `survey_tokens_${slug}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
             
             alert(`Successfully generated ${tokens.length} tokens and started CSV download!`);
         } catch (err) {
@@ -283,7 +284,7 @@
 
                     <div class="pipeline-actions" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
                         {#if pipelineState === 'RUNNING'}
-                            <Button variant="danger" onClick={() => surveyStore.cancelPipeline(slug)}>Cancel</Button>
+                            <Button variant="danger" disabled={!survey.telemetry?.execution_name} onClick={() => surveyStore.cancelPipeline(slug)}>{survey.telemetry?.execution_name ? 'Cancel' : 'Initializing...'}</Button>
                         {:else if pipelineState === 'FAILED' || pipelineState === 'FAILED_ZOMBIE'}
                             <Button variant="secondary" onClick={() => openReportModal(slug, false)}>Resume</Button>
                         {:else if pipelineState === 'COMPLETED'}

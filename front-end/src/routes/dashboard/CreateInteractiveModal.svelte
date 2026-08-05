@@ -31,6 +31,10 @@
     };
 
     const addQuestion = () => {
+        if (questions.length >= 10) {
+            error = "Surveys are limited to a maximum of 10 questions to ensure Firestore security rule coverage and LLM context limits.";
+            return;
+        }
         questions = [...questions, ""];
     };
 
@@ -52,6 +56,10 @@
         const validQuestions = questions.map((q) => q.trim()).filter(Boolean);
         if (validQuestions.length === 0) {
             error = "Missing required question list!";
+            return;
+        }
+        if (validQuestions.length > 10) {
+            error = "Surveys cannot have more than 10 questions.";
             return;
         }
 
@@ -131,8 +139,8 @@
                     {/if}
                 </div>
             {/each}
-            <Button variant="secondary" onClick={addQuestion} type="button"
-                >+ Add Question</Button
+            <Button variant="secondary" onClick={addQuestion} disabled={questions.length >= 10} type="button"
+                >+ Add Question {questions.length >= 10 ? '(Max 10)' : ''}</Button
             >
         </div>
     </form>

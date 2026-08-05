@@ -3,6 +3,7 @@ import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
 // Try to use environment variables first.
 const firebaseConfig = {
@@ -16,6 +17,20 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+if (typeof window !== "undefined") {
+    if (import.meta.env.DEV) {
+        self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+
+    if (import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+        initializeAppCheck(app, {
+            provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+            isTokenAutoRefreshEnabled: true
+        });
+    }
+}
+
 const db = getFirestore(app, "standalone");
 const auth = getAuth(app);
 const storage = getStorage(app);

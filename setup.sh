@@ -157,6 +157,8 @@ curl -s -X PATCH \
 
 # Extract the Registry URL for the Docker push
 REPO_URL=$(terraform output -raw artifact_registry_url)
+RECAPTCHA_SITE_KEY=$(terraform output -raw recaptcha_site_key 2>/dev/null || echo "")
+export RECAPTCHA_SITE_KEY
 IMAGE_URL="${REPO_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
 cd ..
 
@@ -223,7 +225,8 @@ if [ -n "$APP_ID" ]; then
           `VITE_FIREBASE_PROJECT_ID=${cfg.projectId || ""}`,
           `VITE_FIREBASE_STORAGE_BUCKET=${cfg.storageBucket || ""}`,
           `VITE_FIREBASE_MESSAGING_SENDER_ID=${cfg.messagingSenderId || ""}`,
-          `VITE_FIREBASE_APP_ID=${cfg.appId || ""}`
+          `VITE_FIREBASE_APP_ID=${cfg.appId || ""}`,
+          `VITE_RECAPTCHA_SITE_KEY=${process.env.RECAPTCHA_SITE_KEY || ""}`
         ].join("\n");
         fs.writeFileSync("front-end/.env", envContent);
       } catch(e) {

@@ -13,7 +13,9 @@ resource "google_project_service" "services" {
     "eventarc.googleapis.com",
     "pubsub.googleapis.com",
     "logging.googleapis.com",
-    "identitytoolkit.googleapis.com"
+    "identitytoolkit.googleapis.com",
+    "firebaseappcheck.googleapis.com",
+    "recaptchaenterprise.googleapis.com"
   ])
 
   project = var.project_id

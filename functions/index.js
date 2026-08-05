@@ -253,13 +253,18 @@ exports.triggerAnalyticsPipeline = onCall({ region: "us-central1" }, async (requ
                 }
             }
 
-            transaction.set(adminRef, {
+            const updatePayload = {
                 telemetry: {
                     status: "INITIALIZING",
                     is_complete: false,
                     updated_at: FieldValue.serverTimestamp()
                 }
-            }, { merge: true });
+            };
+            if (request.data.purge_checkpoints) {
+                updatePayload.report_url = FieldValue.delete();
+                updatePayload.intermediate_files = FieldValue.delete();
+            }
+            transaction.set(adminRef, updatePayload, { merge: true });
         });
 
         if (request.data.purge_checkpoints) {

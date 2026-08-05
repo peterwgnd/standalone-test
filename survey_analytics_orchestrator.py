@@ -250,6 +250,12 @@ def main():
         admin_ref = survey_ref.collection("admin").document("metadata")
         admin_doc = admin_ref.get()
         admin_data = admin_doc.to_dict() or {} if admin_doc.exists else {}
+
+        telemetry_data = admin_data.get("telemetry", {})
+        status_text = str(telemetry_data.get("status", "")).lower()
+        if "cancel" in status_text or admin_data.get("cancel_requested"):
+            logging.info("Pipeline cancellation detected at startup. Aborting immediately.")
+            sys.exit(0)
         
         survey_data = doc.to_dict() or {}
         survey_type = survey_data.get("type", "integrated")

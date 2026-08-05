@@ -34,6 +34,29 @@ service cloud.firestore {
       );
     }
 
+    // Helper: Prevent client-side spoofing or modifying AI state (followUpQuestion, error)
+    function isAIStateUnchangedForQuestion(newAnswers, oldAnswers, key) {
+      return !(key in newAnswers) || (
+        (!('followUpQuestion' in newAnswers[key]) || (oldAnswers != null && key in oldAnswers && 'followUpQuestion' in oldAnswers[key] && newAnswers[key].followUpQuestion == oldAnswers[key].followUpQuestion)) &&
+        (!('error' in newAnswers[key]) || (oldAnswers != null && key in oldAnswers && 'error' in oldAnswers[key] && newAnswers[key].error == oldAnswers[key].error))
+      );
+    }
+
+    function isNotSpoofingAI(newData, oldData) {
+      let newAnswers = 'answers' in newData ? newData.answers : {};
+      let oldAnswers = oldData != null && 'answers' in oldData ? oldData.answers : {};
+      return isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '0') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '1') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '2') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '3') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '4') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '5') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '6') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '7') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '8') &&
+             isAIStateUnchangedForQuestion(newAnswers, oldAnswers, '9');
+    }
+
     // Rules for the Admin Users collection
     match /admin_users/{uid} {
       allow read, write: if isAdmin();
@@ -51,9 +74,12 @@ service cloud.firestore {
       // 2. Responses Subcollection
       match /responses/{responseId} {
         // Public can submit or update responses if survey is open and token is valid (or admin),
+        // response is not already completed, AI state is not spoofed,
         // and restrict map sizes and string lengths to prevent Denial of Wallet bloating
         allow create, update: if (isSurveyOpen(surveySlug)
                               && isValidToken(surveySlug, responseId)
+                              && (resource == null || resource.data.status != 'completed')
+                              && isNotSpoofingAI(request.resource.data, resource == null ? null : resource.data)
                               && request.resource.data.size() < 20
                               && (!('answers' in request.resource.data) || request.resource.data.answers.size() < 100)
                               && isValidAnswerLength(request.resource.data))

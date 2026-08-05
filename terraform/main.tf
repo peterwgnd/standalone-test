@@ -179,3 +179,29 @@ resource "google_identity_platform_config" "auth" {
     google_firebase_project.default
   ]
 }
+
+# 10. reCAPTCHA Enterprise Key for Firebase App Check
+resource "google_recaptcha_enterprise_key" "app_check_key" {
+  display_name = "standalone-app-check-key"
+  project      = var.project_id
+
+  web_settings {
+    integration_type  = "SCORE"
+    allow_all_domains = true
+  }
+
+  depends_on = [time_sleep.wait_60_seconds]
+}
+
+# 11. Firebase App Check Config with reCAPTCHA Enterprise
+resource "google_firebase_app_check_recaptcha_enterprise_config" "default" {
+  provider = google-beta
+  project  = var.project_id
+  app_id   = google_firebase_web_app.svelte_app.app_id
+  site_key = google_recaptcha_enterprise_key.app_check_key.name
+
+  depends_on = [
+    google_firebase_project.default,
+    google_recaptcha_enterprise_key.app_check_key
+  ]
+}

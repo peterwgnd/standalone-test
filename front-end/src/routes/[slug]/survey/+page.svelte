@@ -22,11 +22,12 @@
     let token = $derived(paramToken || sessionFallback);
 
     onMount(() => {
-        let stored = sessionStorage.getItem("survey_token");
+        const storageKey = `survey_token_${slug}`;
+        let stored = localStorage.getItem(storageKey) || localStorage.getItem("survey_token");
         if (!stored) {
             stored = "anonymous-" + crypto.randomUUID();
-            sessionStorage.setItem("survey_token", stored);
         }
+        localStorage.setItem(storageKey, stored);
         sessionFallback = stored;
     });
 

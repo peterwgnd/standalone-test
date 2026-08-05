@@ -166,7 +166,7 @@
                         <Button variant="primary" href="/{survey.slug}/survey">View Survey</Button>
                     {:else}
                         {#if state === 'RUNNING'}
-                            <Button variant="danger" onClick={() => surveyStore.cancelPipeline(survey.slug)}>Cancel</Button>
+                            <Button variant="danger" disabled={!survey.telemetry?.execution_name} onClick={() => surveyStore.cancelPipeline(survey.slug)}>{survey.telemetry?.execution_name ? 'Cancel' : 'Initializing...'}</Button>
                         {:else if state === 'FAILED' || state === 'FAILED_ZOMBIE'}
                             <Button variant="secondary" onClick={() => openReportModal(survey.slug, false)}>Resume</Button>
                         {:else if state === 'COMPLETED'}
