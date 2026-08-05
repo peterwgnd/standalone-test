@@ -484,9 +484,13 @@ def main():
             update_telemetry(db, args.survey_slug, "Publishing report to Cloud Storage...")
     
         try:
+            import uuid
             bucket = stor.bucket(default_bucket_name)
             blob_path = f"reports/{args.survey_slug}/report.html"
             blob = bucket.blob(blob_path)
+            # Add a Firebase download token to make the URL shareable
+            download_token = str(uuid.uuid4())
+            blob.metadata = {"firebaseStorageDownloadTokens": download_token}
             blob.upload_from_filename(final_html, content_type="text/html")
             gs_url = f"gs://{default_bucket_name}/{blob_path}"
         
