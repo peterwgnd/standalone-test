@@ -20,18 +20,25 @@ service cloud.firestore {
 
     // Helper: Validate answer string lengths (prevent DoW via large string payloads)
     function isValidAnswerLength(data) {
-      return !('answers' in data) || (
-        (!('0' in data.answers) || !('answer' in data.answers['0']) || (data.answers['0'].answer is string && data.answers['0'].answer.size() <= 2000)) &&
-        (!('1' in data.answers) || !('answer' in data.answers['1']) || (data.answers['1'].answer is string && data.answers['1'].answer.size() <= 2000)) &&
-        (!('2' in data.answers) || !('answer' in data.answers['2']) || (data.answers['2'].answer is string && data.answers['2'].answer.size() <= 2000)) &&
-        (!('3' in data.answers) || !('answer' in data.answers['3']) || (data.answers['3'].answer is string && data.answers['3'].answer.size() <= 2000)) &&
-        (!('4' in data.answers) || !('answer' in data.answers['4']) || (data.answers['4'].answer is string && data.answers['4'].answer.size() <= 2000)) &&
-        (!('5' in data.answers) || !('answer' in data.answers['5']) || (data.answers['5'].answer is string && data.answers['5'].answer.size() <= 2000)) &&
-        (!('6' in data.answers) || !('answer' in data.answers['6']) || (data.answers['6'].answer is string && data.answers['6'].answer.size() <= 2000)) &&
-        (!('7' in data.answers) || !('answer' in data.answers['7']) || (data.answers['7'].answer is string && data.answers['7'].answer.size() <= 2000)) &&
-        (!('8' in data.answers) || !('answer' in data.answers['8']) || (data.answers['8'].answer is string && data.answers['8'].answer.size() <= 2000)) &&
-        (!('9' in data.answers) || !('answer' in data.answers['9']) || (data.answers['9'].answer is string && data.answers['9'].answer.size() <= 2000))
-      );
+      let answers = data.answers;
+      
+      // 1. Strictly bound the allowed keys to 0-9
+      let hasValidKeys = answers.keys().hasOnly(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+      
+      // 2. Ensure NO string exceeds 2000 characters
+      let sizesValid = 
+        (!('0' in answers) || ( (!('answer' in answers['0']) || (answers['0'].answer is string && answers['0'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['0']) || (answers['0'].followUpAnswer is string && answers['0'].followUpAnswer.size() <= 2000)) )) &&
+        (!('1' in answers) || ( (!('answer' in answers['1']) || (answers['1'].answer is string && answers['1'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['1']) || (answers['1'].followUpAnswer is string && answers['1'].followUpAnswer.size() <= 2000)) )) &&
+        (!('2' in answers) || ( (!('answer' in answers['2']) || (answers['2'].answer is string && answers['2'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['2']) || (answers['2'].followUpAnswer is string && answers['2'].followUpAnswer.size() <= 2000)) )) &&
+        (!('3' in answers) || ( (!('answer' in answers['3']) || (answers['3'].answer is string && answers['3'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['3']) || (answers['3'].followUpAnswer is string && answers['3'].followUpAnswer.size() <= 2000)) )) &&
+        (!('4' in answers) || ( (!('answer' in answers['4']) || (answers['4'].answer is string && answers['4'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['4']) || (answers['4'].followUpAnswer is string && answers['4'].followUpAnswer.size() <= 2000)) )) &&
+        (!('5' in answers) || ( (!('answer' in answers['5']) || (answers['5'].answer is string && answers['5'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['5']) || (answers['5'].followUpAnswer is string && answers['5'].followUpAnswer.size() <= 2000)) )) &&
+        (!('6' in answers) || ( (!('answer' in answers['6']) || (answers['6'].answer is string && answers['6'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['6']) || (answers['6'].followUpAnswer is string && answers['6'].followUpAnswer.size() <= 2000)) )) &&
+        (!('7' in answers) || ( (!('answer' in answers['7']) || (answers['7'].answer is string && answers['7'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['7']) || (answers['7'].followUpAnswer is string && answers['7'].followUpAnswer.size() <= 2000)) )) &&
+        (!('8' in answers) || ( (!('answer' in answers['8']) || (answers['8'].answer is string && answers['8'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['8']) || (answers['8'].followUpAnswer is string && answers['8'].followUpAnswer.size() <= 2000)) )) &&
+        (!('9' in answers) || ( (!('answer' in answers['9']) || (answers['9'].answer is string && answers['9'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['9']) || (answers['9'].followUpAnswer is string && answers['9'].followUpAnswer.size() <= 2000)) ));
+    
+      return !('answers' in data) || (hasValidKeys && sizesValid);
     }
 
     // Helper: Prevent client-side spoofing or modifying AI state (followUpQuestion, error)
@@ -81,7 +88,6 @@ service cloud.firestore {
                               && (resource == null || resource.data.status != 'completed')
                               && isNotSpoofingAI(request.resource.data, resource == null ? null : resource.data)
                               && request.resource.data.size() < 20
-                              && (!('answers' in request.resource.data) || request.resource.data.answers.size() < 100)
                               && isValidAnswerLength(request.resource.data))
                               || isAdmin();
         

@@ -171,8 +171,25 @@ exports.generateFollowUp = onDocumentWritten({
             return;
         }
     }
-    // CLAIM THE WORK IMMEDIATELY TO PREVENT RACE CONDITIONS
-    await snapshot.ref.update({ status: `generatingFollowUp_Q${currentQuestionIndex}` });
+    // CLAIM THE WORK IMMEDIATELY USING A TRUE TRANSACTION
+    let isClaimed = false;
+    await db.runTransaction(async (t) => {
+        const freshDoc = await t.get(snapshot.ref);
+        const freshData = freshDoc.data();
+        
+        // If another instance already claimed it between our trigger and this transaction, abort.
+        if (freshData.status && freshData.status.startsWith("generatingFollowUp_")) {
+            isClaimed = true;
+            return; 
+        }
+
+        t.update(snapshot.ref, { status: `generatingFollowUp_Q${currentQuestionIndex}` });
+    });
+
+    if (isClaimed) {
+        logger.info(`Follow-up generation for doc ${id} was already claimed by another function instance. Aborting.`);
+        return;
+    }
 
     const adminRef = db.collection("surveys").doc(surveySlug).collection("admin").doc("metadata");
     const adminDoc = await adminRef.get();
@@ -237,8 +254,8 @@ exports.triggerAnalyticsPipeline = onCall({ region: "us-central1" }, async (requ
                 const data = adminDoc.data();
                 const telemetry = data.telemetry;
                 if (telemetry && !telemetry.is_complete) {
-                    const statusText = (telemetry.status || '').toLowerCase();
-                    const isFailed = statusText.includes('fail') || statusText.includes('error') || statusText.includes('cancel');
+                    const statusText = (telemetry.status || "").toLowerCase();
+                    const isFailed = statusText.includes("fail") || statusText.includes("error") || statusText.includes("cancel");
                     let isZombie = false;
                     if (telemetry.updated_at) {
                         const updatedTime = telemetry.updated_at.toDate ? telemetry.updated_at.toDate() : new Date(telemetry.updated_at);

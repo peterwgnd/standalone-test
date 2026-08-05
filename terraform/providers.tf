@@ -12,7 +12,7 @@ terraform {
       source = "hashicorp/time"
     }
   }
-  
+
   # Enable dynamic GCS backend
   backend "gcs" {}
 

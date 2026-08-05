@@ -35,7 +35,7 @@ resource "google_project_iam_member" "functions_firestore_user" {
 # 2. Secret Manager Shell for Gemini API Key
 resource "google_secret_manager_secret" "gemini_api_key" {
   secret_id = "GEMINI_API_KEY"
-  
+
   replication {
     auto {}
   }
@@ -109,7 +109,7 @@ resource "google_firebase_web_app" "svelte_app" {
   provider     = google-beta
   project      = var.project_id
   display_name = "Svelte Admin UI"
-  depends_on   = [
+  depends_on = [
     google_firebase_project.default,
     google_firebase_storage_bucket.default
   ]
@@ -125,7 +125,7 @@ resource "google_cloud_run_v2_job" "analytics_orchestrator" {
     template {
       timeout         = "86400s" # 24 hours
       service_account = google_service_account.cloud_run_sa.email
-      
+
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello"
 
@@ -205,3 +205,13 @@ resource "google_firebase_app_check_recaptcha_enterprise_config" "default" {
     google_recaptcha_enterprise_key.app_check_key
   ]
 }
+
+# 12. Enforce App Check on Firestore
+resource "google_firebase_app_check_service_config" "firestore" {
+  provider         = google-beta
+  project          = var.project_id
+  service_id       = "firestore.googleapis.com"
+  enforcement_mode = "ENFORCED"
+  depends_on       = [google_firebase_app_check_recaptcha_enterprise_config.default]
+}
+
