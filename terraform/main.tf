@@ -198,7 +198,7 @@ resource "google_firebase_app_check_recaptcha_enterprise_config" "default" {
   provider = google-beta
   project  = var.project_id
   app_id   = google_firebase_web_app.svelte_app.app_id
-  site_key = google_recaptcha_enterprise_key.app_check_key.name
+  site_key = basename(google_recaptcha_enterprise_key.app_check_key.name)
 
   depends_on = [
     google_firebase_project.default,
@@ -211,7 +211,10 @@ resource "google_firebase_app_check_service_config" "firestore" {
   provider         = google-beta
   project          = var.project_id
   service_id       = "firestore.googleapis.com"
-  enforcement_mode = "ENFORCED"
+  
+  # Set to "UNENFORCED" (Audit Mode) to prevent ad-blocker lockouts
+  enforcement_mode = "UNENFORCED" 
+  
   depends_on       = [google_firebase_app_check_recaptcha_enterprise_config.default]
 }
 

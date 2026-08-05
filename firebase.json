@@ -20,11 +20,11 @@
   },
   "firestore": {
     "database": "standalone",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "rules": "firebase-config/firestore.rules",
+    "indexes": "firebase-config/firestore.indexes.json"
   },
   "storage": {
-    "rules": "storage.rules"
+    "rules": "firebase-config/storage.rules"
   },
   "functions": [
     {

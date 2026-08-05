@@ -166,7 +166,7 @@ cd ..
 echo "🐳 Building and pushing the Docker image via Cloud Build (with auto-retry)..."
 MAX_RETRIES=3
 RETRY_COUNT=0
-until gcloud builds submit --tag ${IMAGE_URL} .; do
+until gcloud builds submit --tag ${IMAGE_URL} orchestrator; do
   RETRY_COUNT=$((RETRY_COUNT+1))
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
     echo "❌ Cloud Build failed after ${MAX_RETRIES} attempts."

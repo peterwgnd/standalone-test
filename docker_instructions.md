@@ -5,7 +5,7 @@ Because `survey_analytics_orchestrator.py` runs Heavy LLM tasks and uses Node.js
 Run this command from the root directory to build the image and push it to Google Cloud Registry.
 
 ```bash
-gcloud builds submit --tag gcr.io/<project_name>/survey-orchestrator .
+gcloud builds submit --tag gcr.io/<project_name>/survey-orchestrator orchestrator
 ```
 
 ### 2. Create or Update the Cloud Run Job:
