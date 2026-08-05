@@ -2,14 +2,17 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install Git and required build tools (no unverified shell scripts)
-RUN apt-get update && apt-get install -y \
+# Install Git and Node.js 22 natively via official NodeSource repository (avoids multi-stage binary glibc mismatch)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    curl \
+    ca-certificates \
+    gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
-
-# Securely vendor Node.js 22 and npm directly from the official Node Docker image
-COPY --from=node:22-slim /usr/local/bin /usr/local/bin
-COPY --from=node:22-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # Install Python requirements
 COPY requirements.txt .

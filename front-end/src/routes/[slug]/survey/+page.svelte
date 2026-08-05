@@ -231,7 +231,11 @@
                 }
             }
         } catch (e) {
-            alert("Failed to save answer: " + e.message);
+            if (e.code === 'permission-denied' || e.message?.toLowerCase().includes('permission')) {
+                error = "This survey is currently closed or your session is no longer authorized to submit responses.";
+            } else {
+                alert("Failed to save answer: " + e.message);
+            }
             isSubmitting = false;
         }
     };
@@ -271,7 +275,11 @@
                 await completeSurvey();
             }
         } catch (e) {
-            alert("Failed to skip: " + e.message);
+            if (e.code === 'permission-denied' || e.message?.toLowerCase().includes('permission')) {
+                error = "This survey is currently closed or your session is no longer authorized to submit responses.";
+            } else {
+                alert("Failed to skip: " + e.message);
+            }
         }
     };
 
@@ -289,20 +297,20 @@
 
 <div class="interview-container">
     {#if loading}
-        <div class="center-message">Loading workspace...</div>
+        <div class="center-message">Loading survey...</div>
     {:else if error}
         <div class="center-message error">{error}</div>
     {:else if status === "closed"}
         <div class="center-message card">
             <h3>Survey Closed</h3>
-            <p>This workspace is no longer accepting responses.</p>
+            <p>This survey is no longer accepting responses.</p>
         </div>
     {:else if status === "completed"}
         <div class="center-message card success">
             <h3 class="gradient-text">All Done!</h3>
             <p>
                 Your responses have been securely saved and synchronized across
-                your session workspace.
+                your session.
             </p>
             <p class="emoji">🎉</p>
         </div>

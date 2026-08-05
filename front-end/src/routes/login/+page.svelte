@@ -28,9 +28,11 @@
             // Poll to wait for it so we don't prematurely reject the user.
             let tokenResult = await result.user.getIdTokenResult(true);
             let attempts = 0;
-            while (!tokenResult.claims.admin && attempts < 15) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+            let delay = 1000;
+            while (!tokenResult.claims.admin && attempts < 5) {
+                await new Promise(resolve => setTimeout(resolve, delay));
                 tokenResult = await result.user.getIdTokenResult(true);
+                delay = Math.min(delay * 2, 5000);
                 attempts++;
             }
 

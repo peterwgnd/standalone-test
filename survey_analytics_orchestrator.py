@@ -358,11 +358,11 @@ def main():
             sys.argv = cmd
             try:
                 asyncio.run(categorization_runner.main())
-            except BaseException as e:
+            except Exception as e:
                 update_telemetry(db, args.survey_slug, f"Failed during Categorization: {e}", is_complete=True)
-                sys.argv = old_argv
                 sys.exit(1)
-            sys.argv = old_argv
+            finally:
+                sys.argv = old_argv
             
             checkpoint_utils.save_checkpoint(True, ste_name_cat, args.output_dir)
             sync_state_to_bucket(bucket, args.survey_slug, args.output_dir, admin_ref)
@@ -399,11 +399,11 @@ def main():
             sys.argv = cmd
             try:
                 asyncio.run(generate_report_text.main())
-            except BaseException as e:
+            except Exception as e:
                 update_telemetry(db, args.survey_slug, f"Failed during Report Generation: {e}", is_complete=True)
-                sys.argv = old_argv
                 sys.exit(1)
-            sys.argv = old_argv
+            finally:
+                sys.argv = old_argv
             
             checkpoint_utils.save_checkpoint(True, ste_name_rep, args.output_dir)
             sync_state_to_bucket(bucket, args.survey_slug, args.output_dir, admin_ref)

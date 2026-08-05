@@ -1,6 +1,6 @@
 <script>
     import { page } from '$app/state';
-    import { doc, getDoc, collection, onSnapshot, updateDoc } from 'firebase/firestore';
+    import { doc, getDoc, collection, onSnapshot, updateDoc, getCountFromServer, query, where } from 'firebase/firestore';
     import { db, functions } from '$lib/firebase/firebase-config';
     import { httpsCallable } from 'firebase/functions';
     import { surveyStore } from '$lib/stores/surveyStore';
@@ -10,6 +10,7 @@
     import Toggle from '$lib/components/Toggle.svelte';
     import ReportConfigModal from '$lib/components/ReportConfigModal.svelte';
     import ReportLink from '$lib/components/ReportLink.svelte';
+    import { evaluatePipelineState } from '$lib/utils/pipeline';
 
     let slug = $derived(page.params.slug);
 
@@ -32,30 +33,11 @@
     
     let serverTimeOffset = $state(0);
 
-    const evaluatePipelineState = (telemetry) => {
-        if (!telemetry) return 'NOT_STARTED';
-        if (telemetry.is_complete) return 'COMPLETED';
-        
-        const statusText = (telemetry.status || '').toLowerCase();
-        if (statusText.includes('fail') || statusText.includes('error') || statusText.includes('cancel')) {
-            return 'FAILED';
-        }
-
-        if (telemetry.updated_at) {
-            const updatedTime = telemetry.updated_at.toDate ? telemetry.updated_at.toDate() : new Date(telemetry.updated_at);
-            const now = new Date(Date.now() + serverTimeOffset);
-            const diffMinutes = (now - updatedTime) / (1000 * 60);
-            if (diffMinutes > 15) {
-                return 'FAILED_ZOMBIE';
-            }
-        }
-
-        return 'RUNNING';
-    };
-
     $effect(() => {
         let unsubscribeSurvey;
         let unsubscribeAdmin;
+        let pollInterval;
+        let handleVisibilityChange;
 
         const init = async () => {
             try {
@@ -88,14 +70,30 @@
                 let publicData = docSnap.exists() ? docSnap.data() : {};
                 let adminData = adminSnap.exists() ? adminSnap.data() : {};
 
-                const updateSurveyState = () => {
-                    survey = { ...publicData, ...adminData };
-                    responseCount = survey.responseCount || 0;
-                    startedCount = survey.startedCount || 0;
-                    completedCount = survey.completedCount || 0;
+                const fetchResponseCounts = async (isPoll = false) => {
+                    // Guard: Skip if polling while tab is hidden OR survey is closed
+                    if (isPoll && (document.visibilityState !== 'visible' || survey?.status === 'closed')) {
+                        return;
+                    }
+                    try {
+                        const responsesRef = collection(db, 'surveys', slug, 'responses');
+                        const [totalSnap, completedSnap] = await Promise.all([
+                            getCountFromServer(responsesRef),
+                            getCountFromServer(query(responsesRef, where('status', '==', 'completed')))
+                        ]);
+                        responseCount = totalSnap.data().count;
+                        completedCount = completedSnap.data().count;
+                        startedCount = Math.max(0, responseCount - completedCount);
+                    } catch (err) {
+                        console.error('Failed to fetch response counts:', err);
+                    }
                 };
 
-                // Listen to survey document for real-time updates (like status toggles and response counts)
+                const updateSurveyState = () => {
+                    survey = { ...publicData, ...adminData };
+                };
+
+                // Listen to survey document for real-time updates (like status toggles)
                 unsubscribeSurvey = onSnapshot(surveyRef, (snapshot) => {
                     if (snapshot.exists()) {
                         publicData = snapshot.data();
@@ -111,6 +109,16 @@
                     }
                 });
                 
+                fetchResponseCounts(false);
+
+                pollInterval = setInterval(() => fetchResponseCounts(true), 60000);
+                handleVisibilityChange = () => {
+                    if (document.visibilityState === 'visible' && survey?.status !== 'closed') {
+                        fetchResponseCounts(false);
+                    }
+                };
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                
                 loading = false;
             } catch (err) {
                 error = "Failed to load survey: " + err.message;
@@ -123,6 +131,8 @@
         return () => {
             if (unsubscribeSurvey) unsubscribeSurvey();
             if (unsubscribeAdmin) unsubscribeAdmin();
+            if (pollInterval) clearInterval(pollInterval);
+            if (handleVisibilityChange) document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     });
 

@@ -281,3 +281,68 @@ Respondent access is scoped strictly to the survey level. Mixing respondent data
 1. **The 1000-Byte Limit:** Never use Firebase Custom Claims (`admin.auth().setCustomUserClaims`) to store survey-level permissions (e.g., trying to save `allowed_surveys: ['survey1', 'survey2']` on a user object). Claims have a strict 1000-byte limit and will break. Custom Claims are *only* for the boolean `admin: true` global flag.
 2. **Anonymous Respondents:** Respondents should ideally not have full Firebase Auth accounts (with emails/passwords). They should authenticate seamlessly via a single-use token in their URL. You can use Firebase Anonymous Auth under the hood to secure their session without bloating your Auth database with thousands of one-time participant accounts.
 3. **Data Silos:** Firestore Security Rules must ensure that a respondent authenticated via a single-use token can *only* write to their specific response document and absolutely cannot read other responses or global survey metrics.
+
+---
+
+## I. Embeddable Web Component Architecture & Implementation Plan (Click-to-Deploy Multi-Site Support)
+
+### 1. Vision & Click-to-Deploy Alignment
+A central goal of the "Survey-in-a-Box" click-to-deploy ecosystem is enabling self-hosted administrators (such as municipal agencies, civic tech organizations, or researchers) to deploy a single GCP/Firebase instance and seamlessly run surveys across **any number of third-party websites they manage** (e.g., `nyc.gov`, `dot.nyc.gov`, `parks.nyc.gov`).
+
+To achieve this without requiring host server modifications, complex build-tool integration, or CORS/CSP headaches, the survey component is packaged as an embeddable HTML5 Web Component (`<wtp-survey>`) backed by an auto-resizing iframe wrapper.
+
+### 2. Core Architectural Decisions
+
+1. **Embed Architecture: Iframe-Backed Web Component Wrapper**
+   - **Pattern**: The host webpage loads a 1KB static script (`/static/embed.js`) which registers the `<wtp-survey>` Custom Element. This custom element renders a borderless, transparent `<iframe>` pointing to the self-hosted Svelte app (`https://survey.nyc.gov/embed/widget...`).
+   - **Why It Preserves Click-to-Deploy Simplicity**:
+     - **Zero CORS / Firebase Domain Friction**: Because the iframe document runs under the self-hosted app's origin (`survey.nyc.gov`), 100% of Firebase Auth/App Check requests originate from an already-authorized domain. Admins never need to reconfigure Firebase Console for each municipal target site.
+     - **Zero CSP `connect-src` Friction**: Host website IT teams only need to allow framing (`frame-src https://survey.nyc.gov;`), rather than whitelisting Google Cloud and Firestore API endpoints in their Content Security Policy.
+     - **100% CSS & Font Isolation**: Prevents host website global CSS resets (e.g., WordPress or Bootstrap table/button styles) from breaking Tailwind layouts, and prevents Svelte styles from leaking into the host page.
+   - **Zero-Scrollbar Auto-Resizing**: The embedded Svelte app sends real-time `postMessage({ type: 'resize', height: 420 })` events to the parent Custom Element wrapper, smoothly animating iframe height as questions change or error messages appear.
+
+2. **Multi-Survey Queue Mode (`mode="queue"`)**
+   - **Single Mode** (`slug="xyz"`): Collects responses for an individual survey and displays a thank-you screen upon completion.
+   - **Queue Mode** (`mode="queue"`): Chaining open surveys together for participants across multiple sites. By default, it queries Firestore for all surveys where `status == 'open'`, filters out any survey where the respondent's token has already submitted a response in `responses/{tokenId}`, and transitions sequentially through unanswered surveys.
+   - **Overrides**: Supports optional `slugs="s1,s2"` or `tag="transportation"` attributes to scope the queue to a curated playlist.
+
+3. **Wrapper Script Implementation: Lightweight Vanilla JS (`/static/embed.js`)**
+   - Implemented as a ~50-line Vanilla JavaScript class (`class WTPSurvey extends HTMLElement`) in `front-end/static/embed.js`.
+   - Requires **zero build-step complexity** (no secondary Vite configs or bundle dependencies) and executes instantly on any host webpage (~1KB footprint).
+
+4. **Admin UI Generator: Unified Dashboard Embed Modal**
+   - Centralizes snippet generation in a single **"Embed Surveys"** button on the Main Admin Dashboard (`/admin`).
+   - Provides checkboxes to select a single survey, multiple surveys, or all open surveys, alongside visual theme/font controls and an optional "Allowed Embed Domains" allowlist stored in Firestore.
+
+---
+
+### 3. Step-by-Step Implementation Roadmap
+
+#### Step 1: The Lightweight Vanilla JS Embed Wrapper (`/static/embed.js`)
+- [ ] Create `front-end/static/embed.js` defining `class WTPSurvey extends HTMLElement`.
+- [ ] Implement attribute parsing for `slug`, `mode`, `slugs`, `tag`, `theme`, and `font`.
+- [ ] Create the borderless iframe element pointing to `/embed/widget` with URL search parameters.
+- [ ] Add the `window.addEventListener('message', ...)` listener to dynamically adjust `iframe.style.height` upon receiving resize telemetry from the embedded Svelte app.
+
+#### Step 2: The Embeddable Survey Route (`front-end/src/routes/embed/widget/+page.svelte`)
+- [ ] Create a dedicated embed route in SvelteKit stripped of headers, footers, and page margins.
+- [ ] Implement a ResizeObserver / layout effect that sends `window.parent.postMessage({ type: 'resize', height: document.body.scrollHeight }, '*')` whenever DOM height changes.
+- [ ] Support dynamic font loading (Google Fonts auto-injection or custom CDN stylesheets via `font-url`) and CSS variable theming (`theme`, `primary-color`).
+- [ ] Add an origin guard check against `document.referrer` / `window.location.ancestorOrigins` if an `allowedEmbedDomains` list is configured on the survey document in Firestore.
+
+#### Step 3: Multi-Survey Queue Controller (`mode="queue"`)
+- [ ] Create a queue controller state machine for `mode="queue"` in the embed route.
+- [ ] Query Firestore for open surveys (`status == "open"`), optionally filtered by `slugs` or `tag`.
+- [ ] Check existing `/surveys/{slug}/responses/{tokenId}` documents for the current respondent token and filter out completed surveys.
+- [ ] Seamlessly transition the interview loop to the next unanswered survey when the current survey completes.
+
+#### Step 4: Unified Dashboard Embed Modal (Admin UI)
+- [ ] Add an **"Embed Surveys"** button on the Main Admin Dashboard (`/admin`).
+- [ ] Create the Embed Generator Modal with:
+  - Checkboxes for selecting individual surveys, multiple surveys, or "All Open Surveys".
+  - Styling controls (`theme`, `font`).
+  - A text input for "Allowed Embed Domains" (saved to Firestore `admin/metadata` or survey config).
+  - A live-updating HTML snippet preview (`<script src="...">` + `<wtp-survey ...>`) with a one-click Copy button.
+
+#### Step 5: IT Administrator Embed Checklist & CSP Documentation
+- [ ] Include an "IT Checklist" tab in the Dashboard Embed Modal showing the minimal CSP header required (`frame-src https://your-domain.com;`) so self-hosted admins can easily hand it to target website IT coordinators.

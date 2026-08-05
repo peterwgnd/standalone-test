@@ -7,6 +7,16 @@ service cloud.firestore {
       return request.auth != null && (request.auth.token.admin == true || request.auth.token.admin == 'true');
     }
 
+    // Helper: Is the survey open and is the respondent authorized?
+    function isSurveyOpenAndAuthorized(surveySlug, responseId) {
+      let surveyData = get(/databases/$(database)/documents/surveys/$(surveySlug)).data;
+      let isOpen = surveyData.status == 'open';
+      let requiresToken = surveyData.get('requireValidToken', false) == true;
+      let tokenExists = exists(/databases/$(database)/documents/surveys/$(surveySlug)/respondents/$(responseId));
+      
+      return isOpen && (!requiresToken || tokenExists);
+    }
+
     // Rules for the Admin Users collection
     match /admin_users/{uid} {
       allow read, write: if isAdmin();
@@ -25,7 +35,8 @@ service cloud.firestore {
       match /responses/{responseId} {
         // Public can submit or update responses, but restrict map sizes to prevent Denial of Wallet bloating
         allow create, update: if request.resource.data.size() < 20
-                              && (!('answers' in request.resource.data) || request.resource.data.answers.size() < 100);
+                              && (!('answers' in request.resource.data) || request.resource.data.answers.size() < 100)
+                              && isSurveyOpenAndAuthorized(surveySlug, responseId);
         
         // Allow a user to read a specific document if they know the exact random ID
         allow get: if true;

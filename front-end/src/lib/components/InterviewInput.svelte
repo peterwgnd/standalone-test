@@ -26,6 +26,7 @@
         onkeydown={handleKeydown}
         placeholder={isAnalyzing ? "Analyzing your response..." : "Your thoughts here..."}
         disabled={isAnalyzing || isSubmitting}
+        maxlength="2000"
         rows="4"
     ></textarea>
 

@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import { surveyStore } from '$lib/stores/surveyStore';
     import { authStore } from '$lib/stores/authStore';
+    import { evaluatePipelineState } from '$lib/utils/pipeline';
     import Button from '$lib/components/Button.svelte';
     import Card from '$lib/components/Card.svelte';
     import CreateInteractiveModal from './CreateInteractiveModal.svelte';
@@ -64,43 +65,7 @@
     const openReportModal = (slug, purge) => {
         activeReportSlug = slug;
         activeReportPurge = purge;
-        showReportModal = true;
     };
-
-    const evaluatePipelineState = (telemetry) => {
-        if (!telemetry) return 'NOT_STARTED';
-        
-        const statusText = (telemetry.status || '').toLowerCase();
-        if (statusText.includes('fail') || statusText.includes('error') || statusText.includes('cancel')) {
-            return 'FAILED';
-        }
-
-        if (telemetry.is_complete) return 'COMPLETED';
-
-        if (telemetry.updated_at) {
-            let updatedTime;
-            if (telemetry.updated_at.toDate) {
-                updatedTime = telemetry.updated_at.toDate();
-            } else if (telemetry.updated_at.seconds) {
-                updatedTime = new Date(telemetry.updated_at.seconds * 1000);
-            } else {
-                updatedTime = new Date(telemetry.updated_at);
-            }
-
-            if (!isNaN(updatedTime.getTime())) {
-                const now = new Date(Date.now() + serverTimeOffset);
-                const diffMinutes = (now - updatedTime) / (1000 * 60);
-                if (diffMinutes > 15) {
-                    return 'FAILED_ZOMBIE';
-                }
-                return 'RUNNING';
-            }
-        }
-        
-        // If there's no valid updated_at and it's not complete, it's a zombie.
-        return 'FAILED_ZOMBIE';
-    };
-    
 </script>
 
 <svelte:head>
