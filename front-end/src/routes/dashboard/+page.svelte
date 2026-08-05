@@ -65,6 +65,7 @@
     const openReportModal = (slug, purge) => {
         activeReportSlug = slug;
         activeReportPurge = purge;
+        showReportModal = true;
     };
 </script>
 
