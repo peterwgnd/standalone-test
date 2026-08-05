@@ -7,14 +7,31 @@ service cloud.firestore {
       return request.auth != null && (request.auth.token.admin == true || request.auth.token.admin == 'true');
     }
 
-    // Helper: Is the survey open and is the respondent authorized?
-    function isSurveyOpenAndAuthorized(surveySlug, responseId) {
-      let surveyData = get(/databases/$(database)/documents/surveys/$(surveySlug)).data;
-      let isOpen = surveyData.status == 'open';
-      let requiresToken = surveyData.get('requireValidToken', false) == true;
-      let tokenExists = exists(/databases/$(database)/documents/surveys/$(surveySlug)/respondents/$(responseId));
-      
-      return isOpen && (!requiresToken || tokenExists);
+    // Helper: Check if a survey is open
+    function isSurveyOpen(slug) {
+      return get(/databases/$(database)/documents/surveys/$(slug)).data.status == 'open';
+    }
+
+    // Helper: Check if token is valid (or if token validation is not required)
+    function isValidToken(slug, tokenId) {
+      let reqToken = get(/databases/$(database)/documents/surveys/$(slug)).data.requireValidToken;
+      return reqToken == false || reqToken == null || exists(/databases/$(database)/documents/surveys/$(slug)/respondents/$(tokenId));
+    }
+
+    // Helper: Validate answer string lengths (prevent DoW via large string payloads)
+    function isValidAnswerLength(data) {
+      return !('answers' in data) || (
+        (!('0' in data.answers) || !('answer' in data.answers['0']) || (data.answers['0'].answer is string && data.answers['0'].answer.size() <= 2000)) &&
+        (!('1' in data.answers) || !('answer' in data.answers['1']) || (data.answers['1'].answer is string && data.answers['1'].answer.size() <= 2000)) &&
+        (!('2' in data.answers) || !('answer' in data.answers['2']) || (data.answers['2'].answer is string && data.answers['2'].answer.size() <= 2000)) &&
+        (!('3' in data.answers) || !('answer' in data.answers['3']) || (data.answers['3'].answer is string && data.answers['3'].answer.size() <= 2000)) &&
+        (!('4' in data.answers) || !('answer' in data.answers['4']) || (data.answers['4'].answer is string && data.answers['4'].answer.size() <= 2000)) &&
+        (!('5' in data.answers) || !('answer' in data.answers['5']) || (data.answers['5'].answer is string && data.answers['5'].answer.size() <= 2000)) &&
+        (!('6' in data.answers) || !('answer' in data.answers['6']) || (data.answers['6'].answer is string && data.answers['6'].answer.size() <= 2000)) &&
+        (!('7' in data.answers) || !('answer' in data.answers['7']) || (data.answers['7'].answer is string && data.answers['7'].answer.size() <= 2000)) &&
+        (!('8' in data.answers) || !('answer' in data.answers['8']) || (data.answers['8'].answer is string && data.answers['8'].answer.size() <= 2000)) &&
+        (!('9' in data.answers) || !('answer' in data.answers['9']) || (data.answers['9'].answer is string && data.answers['9'].answer.size() <= 2000))
+      );
     }
 
     // Rules for the Admin Users collection
@@ -33,10 +50,14 @@ service cloud.firestore {
 
       // 2. Responses Subcollection
       match /responses/{responseId} {
-        // Public can submit or update responses, but restrict map sizes to prevent Denial of Wallet bloating
-        allow create, update: if request.resource.data.size() < 20
+        // Public can submit or update responses if survey is open and token is valid (or admin),
+        // and restrict map sizes and string lengths to prevent Denial of Wallet bloating
+        allow create, update: if (isSurveyOpen(surveySlug)
+                              && isValidToken(surveySlug, responseId)
+                              && request.resource.data.size() < 20
                               && (!('answers' in request.resource.data) || request.resource.data.answers.size() < 100)
-                              && isSurveyOpenAndAuthorized(surveySlug, responseId);
+                              && isValidAnswerLength(request.resource.data))
+                              || isAdmin();
         
         // Allow a user to read a specific document if they know the exact random ID
         allow get: if true;

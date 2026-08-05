@@ -13,8 +13,8 @@ const geminiApiKey = defineSecret("GEMINI_API_KEY");
 initializeApp();
 
 function buildPrompt(prior_question, prior_response, task_prompt) {
-    const safeResponse = String(prior_response).replace(/[<>]/g, "");
-    const safeQuestion = String(prior_question).replace(/[<>]/g, "");
+    const safeQuestion = String(prior_question || "").replace(/[<>]/g, "");
+    const safeResponse = String(prior_response || "").replace(/[<>]/g, "");
     return `You are a user researcher conducting a survey. The goals and context for this survey are:
     ${task_prompt}
 
@@ -147,12 +147,8 @@ exports.generateFollowUp = onDocumentWritten({
     }
 
     // Guard: Enforce string length validation to prevent DoW context explosion
-    if (typeof currentAnswerObj.answer !== "string" || currentAnswerObj.answer.length > 2000) {
-        logger.warn(`Answer length for Q${currentQuestionIndex} in doc ${id} exceeds 2000 characters (${currentAnswerObj.answer?.length}). Skipping follow-up generation.`);
-        return;
-    }
-    if (typeof currentAnswerObj.question !== "string" || currentAnswerObj.question.length > 1000) {
-        logger.warn(`Question length for Q${currentQuestionIndex} in doc ${id} exceeds 1000 characters. Skipping follow-up generation.`);
+    if (typeof currentAnswerObj.answer !== "string" || currentAnswerObj.answer.length > 2000 || typeof currentAnswerObj.question !== "string" || currentAnswerObj.question.length > 2000) {
+        logger.warn(`Answer or question payload for Q${currentQuestionIndex} in doc: ${id} exceeds 2000 characters. Aborting follow-up generation.`);
         return;
     }
 
@@ -175,7 +171,6 @@ exports.generateFollowUp = onDocumentWritten({
             return;
         }
     }
-
     // CLAIM THE WORK IMMEDIATELY TO PREVENT RACE CONDITIONS
     await snapshot.ref.update({ status: `generatingFollowUp_Q${currentQuestionIndex}` });
 
@@ -233,6 +228,40 @@ exports.triggerAnalyticsPipeline = onCall({ region: "us-central1" }, async (requ
     }
 
     try {
+        const db = getFirestore("standalone");
+        const adminRef = db.collection("surveys").doc(slug).collection("admin").doc("metadata");
+
+        await db.runTransaction(async (transaction) => {
+            const adminDoc = await transaction.get(adminRef);
+            if (adminDoc.exists) {
+                const data = adminDoc.data();
+                const telemetry = data.telemetry;
+                if (telemetry && !telemetry.is_complete) {
+                    const statusText = (telemetry.status || '').toLowerCase();
+                    const isFailed = statusText.includes('fail') || statusText.includes('error') || statusText.includes('cancel');
+                    let isZombie = false;
+                    if (telemetry.updated_at) {
+                        const updatedTime = telemetry.updated_at.toDate ? telemetry.updated_at.toDate() : new Date(telemetry.updated_at);
+                        const diffMinutes = (Date.now() - updatedTime.getTime()) / (1000 * 60);
+                        if (diffMinutes > 15) {
+                            isZombie = true;
+                        }
+                    }
+                    if (!isFailed && !isZombie) {
+                        throw new HttpsError("already-exists", "An analytics pipeline job is already running for this survey. Please wait for it to complete or cancel it before starting a new one.");
+                    }
+                }
+            }
+
+            transaction.set(adminRef, {
+                telemetry: {
+                    status: "INITIALIZING",
+                    is_complete: false,
+                    updated_at: FieldValue.serverTimestamp()
+                }
+            }, { merge: true });
+        });
+
         if (request.data.purge_checkpoints) {
             const { getStorage } = require("firebase-admin/storage");
             const bucket = getStorage().bucket(); // gets default bucket
@@ -281,6 +310,22 @@ exports.triggerAnalyticsPipeline = onCall({ region: "us-central1" }, async (requ
         return { success: true, operation: operation.name };
     } catch (e) {
         logger.error(`Failed to trigger Cloud Run Job for ${slug}:`, e);
+        if (e instanceof HttpsError) {
+            throw e;
+        }
+        try {
+            const db = getFirestore("standalone");
+            const adminRef = db.collection("surveys").doc(slug).collection("admin").doc("metadata");
+            await adminRef.set({
+                telemetry: {
+                    status: "FAILED_TO_START",
+                    is_complete: false,
+                    updated_at: FieldValue.serverTimestamp()
+                }
+            }, { merge: true });
+        } catch (resetErr) {
+            logger.error(`Failed to reset telemetry status for ${slug}:`, resetErr);
+        }
         throw new HttpsError("internal", `Failed to trigger analysis job: ${e.message}`);
     }
 });
@@ -345,7 +390,7 @@ exports.deleteSurvey = onCall({ region: "us-central1", timeoutSeconds: 540 }, as
 
         logger.info(`Starting deep deletion for survey: ${slug}`);
 
-        // 0. Cancel any active Cloud Run Job execution before deleting resources (PRD Requirement)
+        // 0. Check for and cancel any active Cloud Run Job execution before deleting
         try {
             const adminRef = db.collection("surveys").doc(slug).collection("admin").doc("metadata");
             const adminDoc = await adminRef.get();
@@ -358,12 +403,14 @@ exports.deleteSurvey = onCall({ region: "us-central1", timeoutSeconds: 540 }, as
                     const fullExecutionName = executionName.startsWith("projects/")
                         ? executionName
                         : `projects/${projectId}/locations/us-central1/jobs/analytics-orchestrator-job/executions/${executionName}`;
-                    await execClient.cancelExecution({ name: fullExecutionName });
-                    logger.info(`Cancelled active Cloud Run Job execution before deleting survey ${slug}: ${fullExecutionName}`);
+                    logger.info(`Survey deletion requested for ${slug}: Cancelling active Cloud Run Job execution ${fullExecutionName}...`);
+                    await execClient.cancelExecution({ name: fullExecutionName }).catch(e => {
+                        logger.warn(`Warning cancelling execution ${fullExecutionName} during deletion of ${slug}:`, e);
+                    });
                 }
             }
         } catch (cancelErr) {
-            logger.warn(`Could not cancel execution for ${slug} before deletion (may have already stopped):`, cancelErr.message || cancelErr);
+            logger.warn(`Warning checking/cancelling active pipeline for ${slug} during deletion:`, cancelErr);
         }
 
         // 1. Delete Storage Paths (Reports and Uploads)

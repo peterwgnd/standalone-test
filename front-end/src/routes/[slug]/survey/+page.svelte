@@ -8,6 +8,7 @@
         updateDoc,
         onSnapshot,
         Timestamp,
+        deleteField,
     } from "firebase/firestore";
     import { db } from "$lib/firebase/firebase-config";
     import Button from "$lib/components/Button.svelte";
@@ -168,6 +169,8 @@
                     currentInput;
                 updateObj[`answers.${currentQuestionIndex}.timestamp`] =
                     Timestamp.now();
+                updateObj[`answers.${currentQuestionIndex}.error`] =
+                    deleteField();
                 updateObj.status = `pendingFollowUp_Q${currentQuestionIndex}`;
 
                 await updateDoc(responseRef, updateObj);
@@ -215,6 +218,8 @@
                     currentInput;
                 updateObj[`answers.${currentQuestionIndex}.followUpTimestamp`] =
                     Timestamp.now();
+                updateObj[`answers.${currentQuestionIndex}.error`] =
+                    deleteField();
                 updateObj.currentQuestionIndex = currentQuestionIndex + 1;
                 updateObj.status = `moved_to_Q${currentQuestionIndex + 1}`;
 
