@@ -158,7 +158,9 @@ curl -s -X PATCH \
 # Extract the Registry URL for the Docker push
 REPO_URL=$(terraform output -raw artifact_registry_url)
 RECAPTCHA_SITE_KEY=$(terraform output -raw recaptcha_site_key 2>/dev/null || echo "")
+FIREBASE_APP_ID=$(terraform output -raw firebase_app_id 2>/dev/null || echo "")
 export RECAPTCHA_SITE_KEY
+export FIREBASE_APP_ID
 IMAGE_URL="${REPO_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
 cd ..
 
@@ -194,19 +196,25 @@ rm -rf ~/.cache ~/.config/gcloud/logs ~/.npm/_cacache ~/.npm/_logs ~/.local/shar
 echo "🌐 Fetching Firebase client SDK configuration..."
 echo "{\"projects\":{\"default\":\"${PROJECT_ID}\"}}" > .firebaserc
 
-APP_ID=$(firebase apps:list WEB --json --project="${PROJECT_ID}" 2>/dev/null | node -e '
-  let d = "";
-  process.stdin.on("data", c => d += c);
-  process.stdin.on("end", () => {
-    try {
-      const parsed = JSON.parse(d);
-      const apps = parsed.result ? parsed.result : parsed;
-      if (Array.isArray(apps) && apps.length > 0) {
-        console.log(apps[0].appId);
-      }
-    } catch(e) {}
-  });
-' || true)
+# Use the exact App ID Terraform just configured
+APP_ID="${FIREBASE_APP_ID}"
+
+# Only fallback to guessing if Terraform failed to provide the ID
+if [ -z "$APP_ID" ]; then
+  APP_ID=$(firebase apps:list WEB --json --project="${PROJECT_ID}" 2>/dev/null | node -e '
+    let d = "";
+    process.stdin.on("data", c => d += c);
+    process.stdin.on("end", () => {
+      try {
+        const parsed = JSON.parse(d);
+        const apps = parsed.result ? parsed.result : parsed;
+        if (Array.isArray(apps) && apps.length > 0) {
+          console.log(apps[0].appId);
+        }
+      } catch(e) {}
+    });
+  ' || true)
+fi
 
 if [ -n "$APP_ID" ]; then
   firebase apps:sdkconfig WEB "$APP_ID" --json --project="${PROJECT_ID}" 2>/dev/null | node -e '

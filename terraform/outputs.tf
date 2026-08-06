@@ -7,3 +7,8 @@ output "recaptcha_site_key" {
   description = "The reCAPTCHA Enterprise Site Key for Firebase App Check."
   value       = basename(google_recaptcha_enterprise_key.app_check_key.name)
 }
+
+output "firebase_app_id" {
+  description = "The exact App ID of the newly provisioned Firebase Web App."
+  value       = google_firebase_web_app.svelte_app.app_id
+}

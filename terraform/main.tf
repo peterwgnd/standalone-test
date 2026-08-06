@@ -193,6 +193,21 @@ resource "google_recaptcha_enterprise_key" "app_check_key" {
   depends_on = [time_sleep.wait_60_seconds]
 }
 
+# A. Force GCP to provision the hidden Firebase App Check Service Agent
+resource "google_project_service_identity" "app_check_sa" {
+  provider   = google-beta
+  project    = var.project_id
+  service    = "firebaseappcheck.googleapis.com"
+  depends_on = [time_sleep.wait_60_seconds]
+}
+
+# B. Grant the Service Agent permission to verify reCAPTCHA tokens
+resource "google_project_iam_member" "app_check_recaptcha_agent" {
+  project = var.project_id
+  role    = "roles/recaptchaenterprise.agent"
+  member  = "serviceAccount:${google_project_service_identity.app_check_sa.email}"
+}
+
 # 11. Firebase App Check Config with reCAPTCHA Enterprise
 resource "google_firebase_app_check_recaptcha_enterprise_config" "default" {
   provider = google-beta
@@ -202,19 +217,20 @@ resource "google_firebase_app_check_recaptcha_enterprise_config" "default" {
 
   depends_on = [
     google_firebase_project.default,
-    google_recaptcha_enterprise_key.app_check_key
+    google_recaptcha_enterprise_key.app_check_key,
+    google_project_iam_member.app_check_recaptcha_agent
   ]
 }
 
 # 12. Enforce App Check on Firestore
 resource "google_firebase_app_check_service_config" "firestore" {
-  provider         = google-beta
-  project          = var.project_id
-  service_id       = "firestore.googleapis.com"
-  
+  provider   = google-beta
+  project    = var.project_id
+  service_id = "firestore.googleapis.com"
+
   # Set to "UNENFORCED" (Audit Mode) to prevent ad-blocker lockouts
-  enforcement_mode = "UNENFORCED" 
-  
-  depends_on       = [google_firebase_app_check_recaptcha_enterprise_config.default]
+  enforcement_mode = "UNENFORCED"
+
+  depends_on = [google_firebase_app_check_recaptcha_enterprise_config.default]
 }
 
