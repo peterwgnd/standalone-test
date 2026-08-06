@@ -5,18 +5,7 @@ set -e
 
 echo "🚀 Starting Standalone Analytics Platform click-to-deploy setup..."
 
-# 0. Environment Setup
-# Google Cloud Shell recently removed the terraform binary due to licensing changes. 
-# We must dynamically install it if the system stub is detected.
-if ! command -v terraform >/dev/null 2>&1 || terraform --version 2>&1 | grep -q "instructions at"; then
-    echo "📦 Installing Terraform (this will only happen once)..."
-    wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null 2>&1
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
-    sudo apt-get update > /dev/null 2>&1
-    sudo apt-get install -y terraform > /dev/null 2>&1
-fi
-
-# 1. Collect User Inputs
+# 1. Collect User Inputs (Prompt immediately so user doesn't wait)
 echo "--------------------------------------------------------"
 echo "👋 We need 3 quick details to configure your environment:"
 echo "--------------------------------------------------------"
@@ -40,10 +29,11 @@ read -p "2. Enter your Google account email (for Global Admin access): " ADMIN_E
 
 echo ""
 echo "👉 Need a free Gemini API key? Get one in seconds at: https://aistudio.google.com/app/apikey"
+echo ""
 read -p "3. Enter your Gemini API Key: " GEMINI_KEY
 echo ""
 
-# 2. Define Variables
+# 2. Define Variables & Configure Backend
 REGION="us-central1"
 JOB_NAME="analytics-orchestrator-job"
 IMAGE_NAME="orchestrator"
@@ -53,7 +43,30 @@ echo "--------------------------------------------------------"
 echo "⚙️  Configuring backend with Admin Email..."
 echo "ADMIN_EMAIL=${ADMIN_EMAIL}" > functions/.env
 
-# 3. Infrastructure as Code (Terraform)
+# 3. Environment Setup
+# Google Cloud Shell recently removed the terraform binary due to licensing changes. 
+# We dynamically install it if the system stub is detected.
+if ! command -v terraform >/dev/null 2>&1 || terraform --version 2>&1 | grep -q "instructions at"; then
+    echo "📦 Installing Terraform (Fast Download with Checksum Verification)..."
+    
+    TF_VERSION="1.9.5"
+    EXPECTED_SHA256="9cf727b4d6bd2d4d2908f08bd282f9e4809d6c3071c3b8ebe53558bee6dc913b"
+    
+    wget -qO /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+    
+    echo "${EXPECTED_SHA256}  /tmp/terraform.zip" | sha256sum -c - || {
+        echo "❌ Checksum verification failed! The downloaded file may be compromised."
+        rm -f /tmp/terraform.zip
+        exit 1
+    }
+    
+    unzip -qo /tmp/terraform.zip -d /tmp/
+    sudo install -m 755 /tmp/terraform /usr/local/bin/terraform
+    rm -f /tmp/terraform.zip /tmp/terraform
+    hash -r 2>/dev/null || true
+fi
+
+# 4. Infrastructure as Code (Terraform)
 echo "🏗️  Setting up Terraform Remote State..."
 
 # Define a unique bucket name for state storage
@@ -164,7 +177,7 @@ export FIREBASE_APP_ID
 IMAGE_URL="${REPO_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
 cd ..
 
-# 4. Build & Push Docker Image
+# 5. Build & Push Docker Image
 echo "🐳 Building and pushing the Docker image via Cloud Build (with auto-retry)..."
 MAX_RETRIES=3
 RETRY_COUNT=0
@@ -179,13 +192,13 @@ until gcloud builds submit --tag ${IMAGE_URL} orchestrator; do
   sleep 5
 done
 
-# 5. Swap the Dummy Image
+# 6. Swap the Dummy Image
 echo "🔄 Updating Cloud Run Job with the compiled image..."
 gcloud run jobs update ${JOB_NAME} \
   --image ${IMAGE_URL} \
   --region ${REGION}
 
-# 6. Deploy Frontend and Functions
+# 7. Deploy Frontend and Functions
 echo "📦 Installing Frontend and Cloud Functions dependencies..."
 # Automatically clear pip, gcloud, npm caches, and downloaded Terraform provider binaries (~800MB+) to prevent Cloud Shell 5GB ENOSPC disk exhaustion
 npm cache clean --force >/dev/null 2>&1 || true
