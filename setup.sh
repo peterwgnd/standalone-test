@@ -188,7 +188,7 @@ echo "📦 Installing Frontend and Cloud Functions dependencies..."
 # Automatically clear pip, gcloud, npm caches, and downloaded Terraform provider binaries (~800MB+) to prevent Cloud Shell 5GB ENOSPC disk exhaustion
 npm cache clean --force >/dev/null 2>&1 || true
 rm -rf ~/.cache ~/.config/gcloud/logs ~/.npm/_cacache ~/.npm/_logs ~/.local/share/Trash /tmp/* terraform/.terraform >/dev/null 2>&1 || true
-(cd front-end && rm -rf node_modules && npm install)
+(cd front-end && rm -rf node_modules .svelte-kit build && npm install)
 (cd functions && rm -rf node_modules && npm install)
 
 echo "🌐 Fetching Firebase client SDK configuration..."
