@@ -3,7 +3,7 @@
 # Exit immediately if any command fails
 set -e
 
-echo "🚀 Starting Standalone Analytics Platform click-to-deploy setup..."
+echo "🚀 Starting Standalone Sensemaking AI click-to-deploy setup..."
 
 # 1. Collect User Inputs (Prompt immediately so user doesn't wait)
 echo "--------------------------------------------------------"
@@ -25,12 +25,21 @@ gcloud config set project $PROJECT_ID
 gcloud config set billing/quota_project $PROJECT_ID 2>/dev/null || true
 export GOOGLE_CLOUD_QUOTA_PROJECT=$PROJECT_ID
 
-read -p "2. Enter your Google account email (for Global Admin access): " ADMIN_EMAIL
+# Try to get the active logged-in Google account email, if any
+DEFAULT_ADMIN_EMAIL=$(gcloud config get-value account 2>/dev/null || true)
+
+if [ -n "$DEFAULT_ADMIN_EMAIL" ]; then
+    read -p "2. Google account email [Press Enter to use '$DEFAULT_ADMIN_EMAIL']: " INPUT_ADMIN_EMAIL
+    ADMIN_EMAIL=${INPUT_ADMIN_EMAIL:-$DEFAULT_ADMIN_EMAIL}
+else
+    read -p "2. Enter your Google account email (for Global Admin access): " ADMIN_EMAIL
+fi
 
 echo ""
 echo "👉 Need a free Gemini API key? Get one in seconds at: https://aistudio.google.com/app/apikey"
 echo ""
-read -p "3. Enter your Gemini API Key: " GEMINI_KEY
+read -p "3. Enter your Gemini API Key: " INPUT_GEMINI_KEY
+GEMINI_KEY=$(echo "$INPUT_GEMINI_KEY" | tr -d ' "\r\n\t')
 echo ""
 
 # 2. Define Variables & Configure Backend
@@ -274,6 +283,6 @@ until firebase deploy --project "${PROJECT_ID}" --force --non-interactive; do
 done
 
 echo "--------------------------------------------------------"
-echo "✅ Deployment complete! Your Standalone Analytics Platform is live:"
+echo "✅ Deployment complete! Standalone Sensemaking AI is live:"
 echo "👉 Admin UI URL: https://${PROJECT_ID}.web.app/dashboard"
 echo "--------------------------------------------------------"

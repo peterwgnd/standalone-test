@@ -3,7 +3,7 @@ resource "google_artifact_registry_repository" "app_repo" {
   repository_id = "standalone-analytics-repo"
   format        = "DOCKER"
   location      = var.region
-  description   = "Docker repository for the Standalone Analytics Platform"
+  description   = "Docker repository for Standalone Sensemaking AI"
   depends_on    = [time_sleep.wait_60_seconds]
 }
 

@@ -1,9 +1,7 @@
-# PRD: Open-Source "Survey-in-a-Box" Ecosystem (Click-to-Deploy)
-
-Continuing from Conversation df3aecdc-55f1-480b-a51b-b860d81efc2c
+# PRD: Standalone Sensemaking AI (Open-Source Click-to-Deploy Ecosystem)
 
 ## Overview
-Shifting the platform strategy to an Open-Source, self-hosted deployment model. An administrator can pull a GitHub repository, click a Terraform "Deploy to Google Cloud" button, and spin up an isolated instances of a custom Gemini-powered survey system in minutes. All heavy analytics are scoped within a single GCP account for zero friction configuration (no GitHub Action keys required).
+Shifting the platform strategy to an Open-Source, self-hosted deployment model. An administrator can pull a GitHub repository, click a "Deploy to Google Cloud" button in Google Cloud Shell, and spin up an isolated instance of **Standalone Sensemaking AI** in minutes. All heavy analytics and AI processing are scoped within a single GCP account for zero friction configuration.
 
 ## Core Requirements
 
@@ -245,10 +243,10 @@ This section outlines the logical build order for implementing the new Pipeline 
 - [x] **The Delete Function**: Write the `deleteSurvey` Callable Function in `functions/index.js`. We will use the Firebase Admin SDK's `BulkWriter` to delete the `responses` subcollection and `bucket.deleteFiles` to wipe out the Storage buckets safely without timing out.
 - [x] **UI Binding**: Add the "Delete Survey" buttons to the survey admin page and dashboard cards, hook them up to a `confirm()` modal, and wire them to our new `deleteSurvey` function.
 
-### Step 4: Security & Authentication (Deferred)
-- **Env Var Setup**: Integrate the `ADMIN_EMAILS` variable configuration in the deployment.
-- [x] **Auth Triggers**: Write the `syncAdminClaims` trigger to assign custom claims (`admin: true`) or delete unauthorized sign-ups.
-- **Lockdown**: Rewrite `firestore.rules`, `storage.rules`, and update the frontend router and backend functions to explicitly verify the `admin: true` claim.
+### Step 4: Security & Authentication
+- [x] **Env Var Setup**: Integrate the `ADMIN_EMAIL` variable configuration in the deployment (`functions/.env` and `initAdmin`).
+- [x] **Auth Triggers**: Write the `syncAdminClaims` trigger to assign custom claims (`admin: true`) on admin user documents.
+- [x] **Lockdown**: Rewrite `firestore.rules`, `storage.rules`, and update the frontend router and backend functions to explicitly verify the `admin: true` claim, enforce DoW length bounds ($\le 2000$), and block AI state spoofing.
 
 ---
 
@@ -259,23 +257,23 @@ The platform relies on a strict separation of concerns between **Global Administ
 ### 1. Global Admin Management (Main Dashboard)
 Admin access is granted platform-wide. Admins can see all surveys and invite other admins.
 - **Backend (Cloud Functions)**:
-  - [x] **(Completed)** The `syncAdminClaims` Cloud Function already exists to grant the `admin: true` custom claim to users in the `admin_users` collection.
-  - (Optional) Create an `inviteAdmin` callable function to send email invites.
+  - [x] **(Completed)** The `syncAdminClaims` Cloud Function grants the `admin: true` custom claim to users in the `admin_users` collection.
+  - [x] **(Completed)** The `inviteAdmin` callable function adds new admin emails to the `admin_users` collection.
 - **Frontend (Dashboard)**:
-  - Add a `/dashboard/users` route, protected by a Svelte routing guard checking the `admin: true` claim.
-  - Implement a data table displaying current admins. **Because you have the `admin_users` collection in Firestore, your UI can securely query this collection directly!** You don't need a `listAdmins` Cloud Function.
-  - Add a modal to invite new admins (writes to the `admin_users` collection).
+  - [x] Added `/dashboard/users` route, protected by a Svelte routing guard checking the `admin: true` claim.
+  - [x] Implemented a data table displaying current admins querying the `admin_users` collection directly.
+  - [x] Added a modal to invite new admins (writes to the `admin_users` collection).
 
 ### 2. Respondent Management (Survey-Specific Admin)
 Respondent access is scoped strictly to the survey level. Mixing respondent data into global Firebase Auth is an anti-pattern.
 - **Data Model**: Store respondents as a subcollection under the specific survey: `surveys/{surveySlug}/respondents/{respondentId}`.
 - **Backend (Cloud Functions)**:
-  - Create a `generateSurveyTokens` callable function to batch-create single-use access links.
+  - [x] **(Completed)** The `generateSurveyTokens` callable function batch-creates single-use access links.
 - **Frontend (Survey Admin)**:
-  - **Invite-Only Toggle**: Add a toggle in the survey settings to "Require Valid Token". By default, surveys remain public (allowing the current `anonymous-UUID` fallback). When toggled on, the backend validation is strictly enforced.
-  - Add a "Participants" or "Tokens" tab to the `/dashboard/surveys/[slug]/admin` page.
-  - **Bulk Generation & Export**: Provide UI to generate tokens in bulk (e.g., input "1000" tokens) and a button to **Export to CSV**. This allows admins to download a spreadsheet of thousands of URLs to use in a Mail Merge or mass email tool.
-  - Display metrics on which tokens have been claimed vs. unburnt.
+  - [x] **Invite-Only Toggle**: Added a toggle in the survey settings to "Require Valid Token". By default, surveys remain public (allowing the anonymous-UUID fallback). When toggled on, token validation in `firestore.rules` is strictly enforced.
+  - [x] Added a "Participants" / "Tokens" tab to the `/admin/[slug]` page.
+  - [x] **Bulk Generation & Export**: Provided UI to generate tokens in bulk and an **Export to CSV** button for mail merges and mass distributions.
+  - [x] Displayed metrics on claimed vs. unburnt tokens.
 
 ### Key Architectural Considerations
 1. **The 1000-Byte Limit:** Never use Firebase Custom Claims (`admin.auth().setCustomUserClaims`) to store survey-level permissions (e.g., trying to save `allowed_surveys: ['survey1', 'survey2']` on a user object). Claims have a strict 1000-byte limit and will break. Custom Claims are *only* for the boolean `admin: true` global flag.
@@ -284,22 +282,24 @@ Respondent access is scoped strictly to the survey level. Mixing respondent data
 
 ---
 
-## I. Embeddable Web Component Architecture & Implementation Plan (Click-to-Deploy Multi-Site Support)
+## I. Embeddable Web Component Architecture & Implementation Plan (Active Next Milestone)
 
 ### 1. Vision & Click-to-Deploy Alignment
-A central goal of the "Survey-in-a-Box" click-to-deploy ecosystem is enabling self-hosted administrators (such as municipal agencies, civic tech organizations, or researchers) to deploy a single GCP/Firebase instance and seamlessly run surveys across **any number of third-party websites they manage** (e.g., `nyc.gov`, `dot.nyc.gov`, `parks.nyc.gov`).
+A central goal of the **Standalone Sensemaking AI** click-to-deploy ecosystem is enabling self-hosted administrators (such as municipal agencies, civic tech organizations, or researchers) to deploy a single GCP/Firebase instance and seamlessly run surveys across **any number of third-party websites they manage** (e.g., `nyc.gov`, `dot.nyc.gov`, `parks.nyc.gov`).
 
-To achieve this without requiring host server modifications, complex build-tool integration, or CORS/CSP headaches, the survey component is packaged as an embeddable HTML5 Web Component (`<wtp-survey>`) backed by an auto-resizing iframe wrapper.
+To achieve this without requiring host server modifications, complex build-tool integration, or CORS/CSP headaches, the survey component is packaged as an embeddable HTML5 Web Component (`<sensemaking-survey>`) backed by an auto-resizing iframe wrapper.
 
 ### 2. Core Architectural Decisions
 
 1. **Embed Architecture: Iframe-Backed Web Component Wrapper**
-   - **Pattern**: The host webpage loads a 1KB static script (`/static/embed.js`) which registers the `<wtp-survey>` Custom Element. This custom element renders a borderless, transparent `<iframe>` pointing to the self-hosted Svelte app (`https://survey.nyc.gov/embed/widget...`).
+   - **Pattern**: The host webpage loads a 1KB static script (`/static/embed.js`) which registers the `<sensemaking-survey>` Custom Element. This custom element renders a borderless, transparent `<iframe>` pointing to the self-hosted Svelte app (`https://<PROJECT-ID>.web.app/embed/widget...`).
    - **Why It Preserves Click-to-Deploy Simplicity**:
-     - **Zero CORS / Firebase Domain Friction**: Because the iframe document runs under the self-hosted app's origin (`survey.nyc.gov`), 100% of Firebase Auth/App Check requests originate from an already-authorized domain. Admins never need to reconfigure Firebase Console for each municipal target site.
-     - **Zero CSP `connect-src` Friction**: Host website IT teams only need to allow framing (`frame-src https://survey.nyc.gov;`), rather than whitelisting Google Cloud and Firestore API endpoints in their Content Security Policy.
-     - **100% CSS & Font Isolation**: Prevents host website global CSS resets (e.g., WordPress or Bootstrap table/button styles) from breaking Tailwind layouts, and prevents Svelte styles from leaking into the host page.
-   - **Zero-Scrollbar Auto-Resizing**: The embedded Svelte app sends real-time `postMessage({ type: 'resize', height: 420 })` events to the parent Custom Element wrapper, smoothly animating iframe height as questions change or error messages appear.
+     - **Zero CORS / Firebase Domain Friction**: Because the iframe document runs under the self-hosted app's origin, 100% of Firebase Auth/App Check requests originate from an already-authorized domain. Admins never need to reconfigure Firebase Console for each target site.
+     - **Zero CSP `connect-src` Friction**: Host website IT teams only need to allow framing (`frame-src https://<PROJECT-ID>.web.app;`), rather than whitelisting Google Cloud and Firestore API endpoints in their Content Security Policy.
+     - **100% CSS & Font Isolation**: Prevents host website global CSS resets (e.g., WordPress, Drupal, or Bootstrap styles) from breaking layouts, and prevents survey styles from leaking into the host page.
+   - **Zero-Scrollbar Auto-Resizing**: The embedded Svelte app sends real-time `postMessage({ type: 'sense-resize', height: 420 })` events to the parent Custom Element wrapper, smoothly animating iframe height as questions change or error messages appear.
+   - **Auto-Scroll Handshake**: On question transitions, the embed emits `postMessage({ type: 'sense-scroll-into-view' })`, triggering the wrapper script to smoothly scroll the top of the widget into view on the parent window without requiring any custom host scripting.
+   - **Parent Analytics Events**: The wrapper script dispatches standard DOM CustomEvents (`sense-survey-loaded`, `sense-question-answered`, `sense-survey-completed`) on the `<sensemaking-survey>` element for effortless Google Tag Manager / GA4 tracking by the host site webmaster.
 
 2. **Multi-Survey Queue Mode (`mode="queue"`)**
    - **Single Mode** (`slug="xyz"`): Collects responses for an individual survey and displays a thank-you screen upon completion.
@@ -307,11 +307,12 @@ To achieve this without requiring host server modifications, complex build-tool 
    - **Overrides**: Supports optional `slugs="s1,s2"` or `tag="transportation"` attributes to scope the queue to a curated playlist.
 
 3. **Wrapper Script Implementation: Lightweight Vanilla JS (`/static/embed.js`)**
-   - Implemented as a ~50-line Vanilla JavaScript class (`class WTPSurvey extends HTMLElement`) in `front-end/static/embed.js`.
-   - Requires **zero build-step complexity** (no secondary Vite configs or bundle dependencies) and executes instantly on any host webpage (~1KB footprint).
+   - Implemented as a ~50-line Vanilla JavaScript class (`class SensemakingSurvey extends HTMLElement`) in `front-end/static/embed.js`.
+   - Checks `if (!customElements.get('sensemaking-survey'))` for CMS and multi-instance safety.
+   - Requires **zero build-step complexity** and executes instantly on any host webpage (~1KB footprint).
 
 4. **Admin UI Generator: Unified Dashboard Embed Modal**
-   - Centralizes snippet generation in a single **"Embed Surveys"** button on the Main Admin Dashboard (`/admin`).
+   - Centralizes snippet generation in a single **"Embed Surveys"** button on the Main Admin Dashboard (`/dashboard`).
    - Provides checkboxes to select a single survey, multiple surveys, or all open surveys, alongside visual theme/font controls and an optional "Allowed Embed Domains" allowlist stored in Firestore.
 
 ---
@@ -319,14 +320,15 @@ To achieve this without requiring host server modifications, complex build-tool 
 ### 3. Step-by-Step Implementation Roadmap
 
 #### Step 1: The Lightweight Vanilla JS Embed Wrapper (`/static/embed.js`)
-- [ ] Create `front-end/static/embed.js` defining `class WTPSurvey extends HTMLElement`.
-- [ ] Implement attribute parsing for `slug`, `mode`, `slugs`, `tag`, `theme`, and `font`.
+- [ ] Create `front-end/static/embed.js` defining `class SensemakingSurvey extends HTMLElement`.
+- [ ] Implement attribute parsing for `slug`, `mode`, `slugs`, `tag`, `theme`, `primary-color`, and `font`.
 - [ ] Create the borderless iframe element pointing to `/embed/widget` with URL search parameters.
 - [ ] Add the `window.addEventListener('message', ...)` listener to dynamically adjust `iframe.style.height` upon receiving resize telemetry from the embedded Svelte app.
+- [ ] Add auto-scroll handler on `sense-scroll-into-view` and DOM event dispatching (`sense-survey-completed`).
 
 #### Step 2: The Embeddable Survey Route (`front-end/src/routes/embed/widget/+page.svelte`)
 - [ ] Create a dedicated embed route in SvelteKit stripped of headers, footers, and page margins.
-- [ ] Implement a ResizeObserver / layout effect that sends `window.parent.postMessage({ type: 'resize', height: document.body.scrollHeight }, '*')` whenever DOM height changes.
+- [ ] Implement a `ResizeObserver` / layout effect that sends `window.parent.postMessage({ type: 'sense-resize', height: document.body.scrollHeight }, '*')` whenever DOM height changes.
 - [ ] Support dynamic font loading (Google Fonts auto-injection or custom CDN stylesheets via `font-url`) and CSS variable theming (`theme`, `primary-color`).
 - [ ] Add an origin guard check against `document.referrer` / `window.location.ancestorOrigins` if an `allowedEmbedDomains` list is configured on the survey document in Firestore.
 
@@ -337,12 +339,12 @@ To achieve this without requiring host server modifications, complex build-tool 
 - [ ] Seamlessly transition the interview loop to the next unanswered survey when the current survey completes.
 
 #### Step 4: Unified Dashboard Embed Modal (Admin UI)
-- [ ] Add an **"Embed Surveys"** button on the Main Admin Dashboard (`/admin`).
+- [ ] Add an **"Embed Surveys"** button on the Main Admin Dashboard (`/dashboard`).
 - [ ] Create the Embed Generator Modal with:
   - Checkboxes for selecting individual surveys, multiple surveys, or "All Open Surveys".
-  - Styling controls (`theme`, `font`).
+  - Styling controls (`theme`, `primary-color`, `font`).
   - A text input for "Allowed Embed Domains" (saved to Firestore `admin/metadata` or survey config).
-  - A live-updating HTML snippet preview (`<script src="...">` + `<wtp-survey ...>`) with a one-click Copy button.
+  - A live-updating HTML snippet preview (`<script src="...">` + `<sensemaking-survey ...>`) with a one-click Copy button.
 
 #### Step 5: IT Administrator Embed Checklist & CSP Documentation
 - [ ] Include an "IT Checklist" tab in the Dashboard Embed Modal showing the minimal CSP header required (`frame-src https://your-domain.com;`) so self-hosted admins can easily hand it to target website IT coordinators.

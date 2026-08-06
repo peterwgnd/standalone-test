@@ -24,7 +24,7 @@ This repository contains a standalone web application designed for analytics and
 
 ### 2. Web Interface (Svelte)
 - The frontend is built using SvelteKit. Follow Svelte best practices when modifying or adding components in `front-end/src/`.
-- Use TailwindCSS (if configured) or standard CSS for styling.
+- Use standard CSS for styling. Avoid inline styling unless absolutely necessary. Try to use existing components as much as possible. Keep an eye on opportunities to abstract new patterns to components and CSS variables to assist future users in customizing the interface.
 
 ### 3. Google Cloud & Firebase
 - We heavily utilize Google Cloud Services and Firebase. Ensure any new dependencies added to `requirements.txt` or `package.json` are compatible with Cloud Run and Firebase Functions respectively.
