@@ -28,6 +28,14 @@ RUN git clone --depth 1 https://github.com/Jigsaw-Code/sensemaking-tools.git /tm
 # Copy the application files
 COPY . .
 
+# Create a dedicated non-root user and grant permissions to /app
+RUN groupadd -g 10001 appgroup && \
+    useradd -u 10001 -g appgroup -s /bin/sh -m appuser && \
+    chown -R appuser:appgroup /app
+
+# Switch to the non-root user
+USER appuser
+
 # Default Execution state
 WORKDIR /app
 ENTRYPOINT ["python", "survey_analytics_orchestrator.py", "-o", "/tmp"]
