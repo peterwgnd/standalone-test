@@ -4,6 +4,7 @@
     import Select from '$lib/components/Select.svelte';
     import Button from '$lib/components/Button.svelte';
     import { surveyStore } from '$lib/stores/surveyStore';
+    import { slugify } from '$lib/utils/slug';
     import Papa from 'papaparse';
 
     let { show = $bindable(false) } = $props();
@@ -24,11 +25,7 @@
 
     const handleNameInput = () => {
         if (!slugManuallyEdited) {
-            slug = name
-                .toLowerCase()
-                .trim()
-                .replace(/\s+/g, '-')
-                .replace(/[^a-z0-9-]/g, '');
+            slug = slugify(name);
         }
     };
 

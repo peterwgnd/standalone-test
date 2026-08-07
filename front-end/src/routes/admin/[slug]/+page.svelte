@@ -11,6 +11,7 @@
     import ReportConfigModal from '$lib/components/ReportConfigModal.svelte';
     import ReportLink from '$lib/components/ReportLink.svelte';
     import { evaluatePipelineState } from '$lib/utils/pipeline';
+    import { fetchServerTimeOffset } from '$lib/utils/time';
 
     let slug = $derived(page.params.slug);
 
@@ -44,15 +45,9 @@
                 loading = true;
                 error = '';
                 
-                // Fetch server time to calculate client-side clock skew
-                fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
-                    .then(res => {
-                        const dateHeader = res.headers.get('Date');
-                        if (dateHeader) {
-                            serverTimeOffset = new Date(dateHeader).getTime() - Date.now();
-                        }
-                    })
-                    .catch(err => console.error("Failed to sync server time", err));
+                fetchServerTimeOffset().then(offset => {
+                    serverTimeOffset = offset;
+                });
 
                 const surveyRef = doc(db, "surveys", slug);
                 const adminRef = doc(db, "surveys", slug, "admin", "metadata");

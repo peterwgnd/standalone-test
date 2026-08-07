@@ -3,6 +3,7 @@
     import { surveyStore } from '$lib/stores/surveyStore';
     import { authStore } from '$lib/stores/authStore';
     import { evaluatePipelineState } from '$lib/utils/pipeline';
+    import { fetchServerTimeOffset } from '$lib/utils/time';
     import Button from '$lib/components/Button.svelte';
     import Card from '$lib/components/Card.svelte';
     import CreateInteractiveModal from './CreateInteractiveModal.svelte';
@@ -22,15 +23,9 @@
     onMount(() => {
         const unsubscribe = surveyStore.init();
         
-        // Fetch server time to calculate client-side clock skew
-        fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
-            .then(res => {
-                const dateHeader = res.headers.get('Date');
-                if (dateHeader) {
-                    serverTimeOffset = new Date(dateHeader).getTime() - Date.now();
-                }
-            })
-            .catch(err => console.error("Failed to sync server time", err));
+        fetchServerTimeOffset().then(offset => {
+            serverTimeOffset = offset;
+        });
 
         return () => {
             if (unsubscribe) unsubscribe();

@@ -4,6 +4,7 @@
     import { db } from '$lib/firebase/firebase-config';
     import { surveyStore } from '$lib/stores/surveyStore';
     import { evaluatePipelineState } from '$lib/utils/pipeline';
+    import { fetchServerTimeOffset } from '$lib/utils/time';
     import Card from '$lib/components/Card.svelte';
     import Button from '$lib/components/Button.svelte';
     import Badge from '$lib/components/Badge.svelte';
@@ -83,14 +84,9 @@
     };
 
     onMount(() => {
-        fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
-            .then(res => {
-                const dateHeader = res.headers.get('Date');
-                if (dateHeader) {
-                    serverTimeOffset = new Date(dateHeader).getTime() - Date.now();
-                }
-            })
-            .catch(err => console.error("Failed to sync server time", err));
+        fetchServerTimeOffset().then(offset => {
+            serverTimeOffset = offset;
+        });
 
         loadMore();
     });
