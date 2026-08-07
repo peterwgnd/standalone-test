@@ -1,6 +1,6 @@
 <script>
     import { page } from '$app/state';
-    import { doc, getDoc, collection, onSnapshot, updateDoc, getCountFromServer, query, where } from 'firebase/firestore';
+    import { doc, getDoc, collection, onSnapshot, updateDoc, getCountFromServer, query, where, setDoc } from 'firebase/firestore';
     import { db, functions } from '$lib/firebase/firebase-config';
     import { httpsCallable } from 'firebase/functions';
     import { surveyStore } from '$lib/stores/surveyStore';
@@ -131,13 +131,21 @@
         };
     });
 
-    const generateLink = () => {
+    const generateLink = async () => {
         if (!tokenLabel) return;
         const safeToken = tokenLabel.replace(/[^a-zA-Z0-9_-]/g, '');
-        const host = window.location.origin;
-        const newLink = `${host}/${slug}/survey?token=${safeToken}`;
-        generatedLinks = [{ label: tokenLabel, url: newLink }, ...generatedLinks];
-        tokenLabel = '';
+        try {
+            await setDoc(doc(db, "surveys", slug, "respondents", safeToken), {
+                createdAt: new Date(),
+                createdBy: "admin-manual"
+            });
+            const host = window.location.origin;
+            const newLink = `${host}/${slug}/survey?token=${safeToken}`;
+            generatedLinks = [{ label: tokenLabel, url: newLink }, ...generatedLinks];
+            tokenLabel = '';
+        } catch (err) {
+            alert("Failed to create token in database: " + err.message);
+        }
     };
 
     const copyToClipboard = (text) => {

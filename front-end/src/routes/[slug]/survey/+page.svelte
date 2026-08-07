@@ -23,7 +23,7 @@
 
     onMount(() => {
         const storageKey = `survey_token_${slug}`;
-        let stored = localStorage.getItem(storageKey) || localStorage.getItem("survey_token");
+        let stored = paramToken || localStorage.getItem(storageKey) || localStorage.getItem("survey_token");
         if (!stored) {
             stored = "anonymous-" + crypto.randomUUID();
         }

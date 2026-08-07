@@ -71,10 +71,16 @@ const createSurveyStore = () => {
                     snapshot.docChanges().forEach(change => {
                         if (change.type === 'removed') {
                             const id = change.doc.id;
-                            if (adminUnsubs.has(id)) {
-                                adminUnsubs.get(id)();
-                                adminUnsubs.delete(id);
-                            }
+                            update(s => {
+                                const stillExists = s.openSurveys.some(x => x.id === id) || 
+                                                    s.closedSurveys.some(x => x.id === id) || 
+                                                    s.uploadedSurveys.some(x => x.id === id);
+                                if (!stillExists && adminUnsubs.has(id)) {
+                                    adminUnsubs.get(id)();
+                                    adminUnsubs.delete(id);
+                                }
+                                return s;
+                            });
                         }
                     });
 

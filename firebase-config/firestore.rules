@@ -19,6 +19,12 @@ service cloud.firestore {
     }
 
     // Helper: Validate answer string lengths (prevent DoW via large string payloads)
+    function isValidSingleAnswer(ans) {
+      return (!('answer' in ans) || (ans.answer is string && ans.answer.size() <= 2000)) &&
+             (!('followUpAnswer' in ans) || (ans.followUpAnswer is string && ans.followUpAnswer.size() <= 2000)) &&
+             (!('question' in ans) || (ans.question is string && ans.question.size() <= 2000));
+    }
+
     function isValidAnswerLength(data) {
       let answers = data.answers;
       
@@ -27,26 +33,40 @@ service cloud.firestore {
       
       // 2. Ensure NO string exceeds 2000 characters
       let sizesValid = 
-        (!('0' in answers) || ( (!('answer' in answers['0']) || (answers['0'].answer is string && answers['0'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['0']) || (answers['0'].followUpAnswer is string && answers['0'].followUpAnswer.size() <= 2000)) )) &&
-        (!('1' in answers) || ( (!('answer' in answers['1']) || (answers['1'].answer is string && answers['1'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['1']) || (answers['1'].followUpAnswer is string && answers['1'].followUpAnswer.size() <= 2000)) )) &&
-        (!('2' in answers) || ( (!('answer' in answers['2']) || (answers['2'].answer is string && answers['2'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['2']) || (answers['2'].followUpAnswer is string && answers['2'].followUpAnswer.size() <= 2000)) )) &&
-        (!('3' in answers) || ( (!('answer' in answers['3']) || (answers['3'].answer is string && answers['3'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['3']) || (answers['3'].followUpAnswer is string && answers['3'].followUpAnswer.size() <= 2000)) )) &&
-        (!('4' in answers) || ( (!('answer' in answers['4']) || (answers['4'].answer is string && answers['4'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['4']) || (answers['4'].followUpAnswer is string && answers['4'].followUpAnswer.size() <= 2000)) )) &&
-        (!('5' in answers) || ( (!('answer' in answers['5']) || (answers['5'].answer is string && answers['5'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['5']) || (answers['5'].followUpAnswer is string && answers['5'].followUpAnswer.size() <= 2000)) )) &&
-        (!('6' in answers) || ( (!('answer' in answers['6']) || (answers['6'].answer is string && answers['6'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['6']) || (answers['6'].followUpAnswer is string && answers['6'].followUpAnswer.size() <= 2000)) )) &&
-        (!('7' in answers) || ( (!('answer' in answers['7']) || (answers['7'].answer is string && answers['7'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['7']) || (answers['7'].followUpAnswer is string && answers['7'].followUpAnswer.size() <= 2000)) )) &&
-        (!('8' in answers) || ( (!('answer' in answers['8']) || (answers['8'].answer is string && answers['8'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['8']) || (answers['8'].followUpAnswer is string && answers['8'].followUpAnswer.size() <= 2000)) )) &&
-        (!('9' in answers) || ( (!('answer' in answers['9']) || (answers['9'].answer is string && answers['9'].answer.size() <= 2000)) && (!('followUpAnswer' in answers['9']) || (answers['9'].followUpAnswer is string && answers['9'].followUpAnswer.size() <= 2000)) ));
+        (!('0' in answers) || isValidSingleAnswer(answers['0'])) &&
+        (!('1' in answers) || isValidSingleAnswer(answers['1'])) &&
+        (!('2' in answers) || isValidSingleAnswer(answers['2'])) &&
+        (!('3' in answers) || isValidSingleAnswer(answers['3'])) &&
+        (!('4' in answers) || isValidSingleAnswer(answers['4'])) &&
+        (!('5' in answers) || isValidSingleAnswer(answers['5'])) &&
+        (!('6' in answers) || isValidSingleAnswer(answers['6'])) &&
+        (!('7' in answers) || isValidSingleAnswer(answers['7'])) &&
+        (!('8' in answers) || isValidSingleAnswer(answers['8'])) &&
+        (!('9' in answers) || isValidSingleAnswer(answers['9']));
     
       return !('answers' in data) || (hasValidKeys && sizesValid);
     }
 
     // Helper: Prevent client-side spoofing or modifying AI state (followUpQuestion, error)
     function isAIStateUnchangedForQuestion(newAnswers, oldAnswers, key) {
-      return !(key in newAnswers) || (
-        (!('followUpQuestion' in newAnswers[key]) || (oldAnswers != null && key in oldAnswers && 'followUpQuestion' in oldAnswers[key] && newAnswers[key].followUpQuestion == oldAnswers[key].followUpQuestion)) &&
-        (!('error' in newAnswers[key]) || (oldAnswers != null && key in oldAnswers && 'error' in oldAnswers[key] && newAnswers[key].error == oldAnswers[key].error))
-      );
+      let oldAns = (oldAnswers != null && key in oldAnswers) ? oldAnswers[key] : null;
+      let newAns = (key in newAnswers) ? newAnswers[key] : null;
+      
+      let oldHasFollowUp = oldAns != null && 'followUpQuestion' in oldAns;
+      let newHasFollowUp = newAns != null && 'followUpQuestion' in newAns;
+      
+      // Follow-up cannot be added by client, nor deleted/modified once created by backend
+      let followUpSafe = oldHasFollowUp 
+        ? (newHasFollowUp && newAns.followUpQuestion == oldAns.followUpQuestion) 
+        : !newHasFollowUp;
+
+      let oldHasError = oldAns != null && 'error' in oldAns;
+      let newHasError = newAns != null && 'error' in newAns;
+      
+      // Allow deleting the error flag (to retry), but prevent user from adding/modifying it
+      let errorSafe = !newHasError || (oldHasError && newAns.error == oldAns.error);
+
+      return (oldAns == null && newAns == null) || (newAns != null && followUpSafe && errorSafe);
     }
 
     function isNotSpoofingAI(newData, oldData) {

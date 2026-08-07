@@ -32,6 +32,26 @@ resource "google_project_iam_member" "functions_firestore_user" {
   member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
 }
 
+# Grant Cloud Functions permission to trigger/cancel Cloud Run Jobs
+resource "google_project_iam_member" "functions_run_developer" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "functions_sa_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+# Grant Cloud Functions permission to delete files during survey deep-deletion
+resource "google_project_iam_member" "functions_storage_admin" {
+  project = var.project_id
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
 # 2. Secret Manager Shell for Gemini API Key
 resource "google_secret_manager_secret" "gemini_api_key" {
   secret_id = "GEMINI_API_KEY"
